@@ -61,7 +61,7 @@ PLIST_TEXT = {
         "BeamX finds and connects to your other devices on this network.",
     # Required by the WebRTC library even though BeamX only captures the screen.
     "NSCameraUsageDescription":
-        "BeamX does not use the camera yet. This is required by the video library.",
+        "BeamX uses the camera only to scan pairing QR codes.",
     "NSMicrophoneUsageDescription":
         "BeamX does not use the microphone yet. This is required by the audio library.",
 }
@@ -80,11 +80,21 @@ def ios_plist(s: str) -> str:
     s = re.sub(
         r"(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)", r"\1BeamX\2", s
     )
+    # Received files appear in the Files app under "On My iPhone → BeamX".
+    for key in ("UIFileSharingEnabled", "LSSupportsOpeningDocumentsInPlace"):
+        if f"<key>{key}</key>" not in s:
+            s = s.replace("<dict>", f"<dict>\n\t<key>{key}</key>\n\t<true/>", 1)
     return add_plist_keys(s)
 
 
 def mac_entitlements(s: str) -> str:
-    for key in ("com.apple.security.network.server", "com.apple.security.network.client"):
+    for key in (
+        "com.apple.security.network.server",
+        "com.apple.security.network.client",
+        "com.apple.security.device.camera",
+        "com.apple.security.files.user-selected.read-only",
+        "com.apple.security.files.downloads.read-write",
+    ):
         if key not in s:
             s = s.replace("<dict>", f"<dict>\n\t<key>{key}</key>\n\t<true/>", 1)
     return s

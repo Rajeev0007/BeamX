@@ -208,6 +208,14 @@ class _StreamScreenState extends State<StreamScreen> {
               color: Colors.redAccent,
               onTap: () => Navigator.of(context).maybePop(),
             ),
+            ValueListenableBuilder<bool>(
+              valueListenable: s.link.ready,
+              builder: (context, ready, _) => _ToolButton(
+                icon: Icons.attach_file_rounded,
+                tooltip: 'Send files',
+                onTap: ready ? s.link.pickAndSend : null,
+              ),
+            ),
             _ToolButton(
               icon: Icons.query_stats_rounded,
               tooltip: 'Stats overlay',
@@ -313,7 +321,7 @@ class _ToolButton extends StatelessWidget {
 
   final IconData icon;
   final String tooltip;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color? color;
   final bool active;
 
@@ -325,6 +333,7 @@ class _ToolButton extends StatelessWidget {
       isSelected: active,
       style: IconButton.styleFrom(
         foregroundColor: color ?? Colors.white,
+        disabledForegroundColor: Colors.white38,
         backgroundColor: active ? Colors.white24 : null,
       ),
       icon: Icon(icon),

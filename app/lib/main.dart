@@ -5,18 +5,26 @@ import 'services/connection_service.dart';
 import 'services/discovery_service.dart';
 import 'services/pairing_service.dart';
 import 'services/settings_store.dart';
+import 'services/transfer_service.dart';
+import 'services/trust_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await SettingsStore.load();
-  final discovery = DiscoveryService(settings);
+  final trust = await TrustStore.load();
+  final discovery = DiscoveryService(settings, trust.deviceId);
   final pairing = PairingService();
-  final connection = ConnectionService(settings, pairing, discovery);
+  final transfers = TransferService();
+  final connection = ConnectionService(settings, pairing, trust, transfers);
   runApp(BeamXApp(
-    settings: settings,
-    discovery: discovery,
-    pairing: pairing,
-    connection: connection,
+    services: AppServices(
+      settings: settings,
+      discovery: discovery,
+      pairing: pairing,
+      connection: connection,
+      trust: trust,
+      transfers: transfers,
+    ),
   ));
   discovery.start();
   connection.start();

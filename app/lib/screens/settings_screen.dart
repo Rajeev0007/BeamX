@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../app_scope.dart';
 import '../models/settings.dart';
 import '../services/settings_store.dart';
+import '../services/trust_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/page_header.dart';
 
@@ -158,7 +159,8 @@ final _entries = <_Entry>[
   _Entry('Connection', 'Auto-connect trusted devices', 'reconnect', (c, st, s) {
     return SwitchListTile(
       secondary: const Icon(Icons.autorenew_rounded),
-      title: const Text('Auto-connect trusted devices'),
+      title: const Text('Trusted devices skip the Allow prompt'),
+      subtitle: const Text('Turn off to approve every connection, even from trusted devices'),
       value: s.autoConnectTrusted,
       onChanged: (v) => st.update((x) => x.copyWith(autoConnectTrusted: v)),
     );
@@ -285,6 +287,31 @@ final _entries = <_Entry>[
       value: s.clipboardSync,
       items: {for (final v in ClipboardSync.values) v: v.label},
       onChanged: (v) => st.update((x) => x.copyWith(clipboardSync: v)),
+    );
+  }),
+  _Entry('Security & privacy', 'Trusted devices', 'trust remember forget remove', (c, st, s) {
+    final trust = AppScope.of(c).trust;
+    return ValueListenableBuilder<List<TrustedDevice>>(
+      valueListenable: trust.trustedByMe,
+      builder: (c, list, _) => ExpansionTile(
+        leading: const Icon(Icons.verified_user_rounded),
+        title: const Text('Trusted devices'),
+        subtitle: Text(list.isEmpty
+            ? 'None. Tick "Trust this device" when allowing a connection.'
+            : '${list.length} can connect without a code'),
+        children: [
+          for (final d in list)
+            ListTile(
+              title: Text(d.name),
+              subtitle: Text('${d.platform} · added '
+                  '${d.added.toLocal().toString().substring(0, 10)}'),
+              trailing: TextButton(
+                onPressed: () => trust.untrust(d.id),
+                child: const Text('Remove'),
+              ),
+            ),
+        ],
+      ),
     );
   }),
   _Entry('Security & privacy', 'Visible to nearby devices', 'discoverable hidden', (c, st, s) {

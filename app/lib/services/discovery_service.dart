@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -18,7 +17,7 @@ import 'settings_store.dart';
 /// so on iOS this service only listens; pairing by QR code or IP address is
 /// used there instead.
 class DiscoveryService {
-  DiscoveryService(this._settings) : selfId = _randomId();
+  DiscoveryService(this._settings, this.selfId);
 
   static const discoveryPort = 47801;
   static const _magic = 'beamx';
@@ -28,6 +27,7 @@ class DiscoveryService {
   static const _expireAfter = Duration(seconds: 8);
 
   final SettingsStore _settings;
+  /// This device's permanent ID (see TrustStore).
   final String selfId;
 
   final ValueNotifier<List<PeerDevice>> peers = ValueNotifier(const []);
@@ -148,11 +148,5 @@ class DiscoveryService {
     _timer?.cancel();
     _socket?.close();
     _socket = null;
-  }
-
-  static String _randomId() {
-    final r = Random.secure();
-    return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'))
-        .join();
   }
 }

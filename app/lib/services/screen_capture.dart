@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:flutter_background/flutter_background.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import 'prompts.dart';
+
 /// Captures this device's screen as a WebRTC media stream.
 class ScreenCapture {
   ScreenCapture._();
@@ -38,7 +40,7 @@ class ScreenCapture {
           .getDisplayMedia(<String, dynamic>{'video': true, 'audio': false});
     }
 
-    // Desktop: capture the first (main) screen.
+    // Desktop: share the only screen, or ask which one if there are several.
     if (Platform.isMacOS) {
       final granted = await Helper.requestCapturePermission();
       if (!granted) throw CaptureDenied();
@@ -48,9 +50,13 @@ class ScreenCapture {
     if (sources.isEmpty) {
       throw StateError('No screen found to share');
     }
+    final source = sources.length == 1
+        ? sources.first
+        : await Prompts.chooseScreen(sources);
+    if (source == null) throw CaptureDenied();
     return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
       'video': {
-        'deviceId': {'exact': sources.first.id},
+        'deviceId': {'exact': source.id},
         'mandatory': {'frameRate': fps.toDouble()},
       },
       'audio': false,

@@ -67,8 +67,10 @@ class SignalingChannel {
     }
     if (m['t'] == type) return m;
     final reason = m['reason'];
+    final code = m['code'];
     throw SignalingException(
-        reason is String && reason.length <= 200 ? reason : 'Connection refused');
+        reason is String && reason.length <= 200 ? reason : 'Connection refused',
+        code: code is String && code.length <= 32 ? code : null);
   }
 
   /// All remaining messages, for the WebRTC session after the handshake.
@@ -98,8 +100,11 @@ class SignalingChannel {
 }
 
 class SignalingException implements Exception {
-  SignalingException(this.message);
+  SignalingException(this.message, {this.code});
   final String message;
+
+  /// Machine-readable reason, e.g. `untrusted` or `need-code`.
+  final String? code;
   @override
   String toString() => message;
 }

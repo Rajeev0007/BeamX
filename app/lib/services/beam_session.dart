@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../models/settings.dart';
+import 'data_link.dart';
 import 'pairing_service.dart';
 import 'screen_capture.dart';
 import 'signaling.dart';
@@ -111,7 +112,11 @@ class BeamSession extends ChangeNotifier {
     required this._channel,
     required this._code,
     required this._quality,
+    required this.link,
   });
+
+  /// Files, clipboard and trust keys for this session.
+  final DataLink link;
 
   final SessionRole role;
   final String peerName;
@@ -168,6 +173,9 @@ class BeamSession extends ChangeNotifier {
           close('Connection lost');
         }
       };
+      pc.onDataChannel = (dc) {
+        if (dc.label == 'beamx') link.attach(dc);
+      };
       pc.onTrack = (e) {
         if (e.track.kind == 'video' && e.streams.isNotEmpty) {
           renderer.srcObject = e.streams.first;
@@ -195,6 +203,8 @@ class BeamSession extends ChangeNotifier {
     track.onEnded = () => close('Screen sharing was stopped');
     _sender = await pc.addTrack(track, stream);
     await _preferCodec(pc, _quality.codec);
+    link.attach(await pc.createDataChannel(
+        'beamx', RTCDataChannelInit()..ordered = true));
 
     final offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -405,6 +415,7 @@ class BeamSession extends ChangeNotifier {
     _channel.send({'t': 'bye'});
     _channel.close(reason);
     await _messages?.cancel();
+    await link.close();
     try {
       for (final t in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
         await t.stop();

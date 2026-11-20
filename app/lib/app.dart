@@ -2,33 +2,19 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app_scope.dart';
 import 'screens/shell.dart';
-import 'services/connection_service.dart';
-import 'services/discovery_service.dart';
-import 'services/pairing_service.dart';
-import 'services/settings_store.dart';
+import 'services/prompts.dart';
 import 'theme/app_theme.dart';
 
 class BeamXApp extends StatelessWidget {
-  const BeamXApp({
-    super.key,
-    required this.settings,
-    required this.discovery,
-    required this.pairing,
-    required this.connection,
-  });
+  const BeamXApp({super.key, required this.services});
 
-  final SettingsStore settings;
-  final DiscoveryService discovery;
-  final PairingService pairing;
-  final ConnectionService connection;
+  final AppServices services;
 
   @override
   Widget build(BuildContext context) {
+    final settings = services.settings;
     return AppScope(
-      settings: settings,
-      discovery: discovery,
-      pairing: pairing,
-      connection: connection,
+      services: services,
       child: ListenableBuilder(
         listenable: settings,
         builder: (context, child) {
@@ -36,6 +22,7 @@ class BeamXApp extends StatelessWidget {
           final seed = AppTheme.accent(s.accentIndex);
           return MaterialApp(
             title: 'BeamX',
+            navigatorKey: navigatorKey,
             debugShowCheckedModeBanner: false,
             themeMode: s.themeMode,
             theme: AppTheme.build(seed, Brightness.light),

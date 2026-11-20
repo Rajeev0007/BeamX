@@ -9,6 +9,7 @@ import '../widgets/page_header.dart';
 import '../widgets/pressable.dart';
 import '../widgets/radar.dart';
 import 'pairing_sheet.dart';
+import 'qr_scan_screen.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
@@ -35,6 +36,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
     super.dispose();
   }
 
+  Future<void> _scan(BuildContext context) async {
+    final result = await Navigator.of(context).push<ScannedPairing>(
+        MaterialPageRoute(builder: (_) => const QrScanScreen()));
+    if (result == null || !context.mounted) return;
+    await showPairingSheet(context, peer: result.peer, code: result.code);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
@@ -44,10 +52,23 @@ class _DevicesScreenState extends State<DevicesScreen> {
           child: PageHeader(
             title: 'Devices',
             subtitle: 'Connect to share or view a screen',
-            trailing: FilledButton.tonalIcon(
-              onPressed: () => showPairingSheet(context),
-              icon: const Icon(Icons.qr_code_2_rounded),
-              label: const Text('Pair'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (qrScanSupported) ...[
+                  IconButton.filledTonal(
+                    tooltip: 'Scan pairing QR',
+                    onPressed: () => _scan(context),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                FilledButton.tonalIcon(
+                  onPressed: () => showPairingSheet(context),
+                  icon: const Icon(Icons.qr_code_2_rounded),
+                  label: const Text('Pair'),
+                ),
+              ],
             ),
           ),
         ),
@@ -199,6 +220,7 @@ class _DeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final trusted = AppScope.of(context).connection.isTrustedBy(peer);
     final age = peer.ageSeconds(DateTime.now());
     final signal = age <= 3
         ? Colors.green
@@ -248,9 +270,10 @@ class _DeviceCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Icon(Icons.wifi_rounded, size: 16, color: scheme.primary),
+                  Icon(trusted ? Icons.verified_user_rounded : Icons.wifi_rounded,
+                      size: 16, color: scheme.primary),
                   const SizedBox(width: 6),
-                  Text('Same Wi-Fi',
+                  Text(trusted ? 'Trusted · no code' : 'Same Wi-Fi',
                       style: TextStyle(
                           color: scheme.primary, fontWeight: FontWeight.w600)),
                   const Spacer(),

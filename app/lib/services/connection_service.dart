@@ -5,11 +5,14 @@ import 'package:flutter/foundation.dart';
 
 import '../models/peer_device.dart';
 import 'beam_session.dart';
+import 'data_link.dart';
 import 'discovery_service.dart';
 import 'pairing_service.dart';
 import 'screen_capture.dart';
 import 'settings_store.dart';
 import 'signaling.dart';
+import 'transfer_service.dart';
+import 'trust_store.dart';
 
 enum StreamMode {
   /// The connecting device wants to see this device's screen.
@@ -26,18 +29,26 @@ class IncomingRequest {
     required this.platform,
     required this.address,
     required this.mode,
+    required this.alreadyTrusted,
   });
 
   final String name;
   final String platform;
   final String address;
   final StreamMode mode;
+
+  /// True if this device is trusted already (no need to offer trust).
+  final bool alreadyTrusted;
+
+  /// Set by [accept]: let this device connect without a code next time.
+  bool trust = false;
   final _decision = Completer<bool>();
 
   /// Completes when the request is accepted, declined or expires.
   Future<bool> get decided => _decision.future;
 
-  void accept() {
+  void accept({bool trust = false}) {
+    this.trust = trust;
     if (!_decision.isCompleted) _decision.complete(true);
   }
 
@@ -49,17 +60,20 @@ class IncomingRequest {
 /// Accepts incoming connections and makes outgoing ones.
 ///
 /// Every BeamX device runs a small WebSocket server on the configured port.
-/// The handshake is: challenge (nonce) → hello (pairing proof) → user
-/// approval → accept. After that the [BeamSession] takes over the channel.
+/// The handshake is: challenge (nonce) → hello (proof of the pairing code,
+/// or of a trust key) → user approval → accept. After that the
+/// [BeamSession] takes over the channel.
 class ConnectionService {
-  ConnectionService(this._settings, this._pairing, this._discovery) {
+  ConnectionService(
+      this._settings, this._pairing, this._trust, this._transfers) {
     _port = _settings.value.port;
     _settings.addListener(_onSettings);
   }
 
   final SettingsStore _settings;
   final PairingService _pairing;
-  final DiscoveryService _discovery;
+  final TrustStore _trust;
+  final TransferService _transfers;
 
   final ValueNotifier<IncomingRequest?> pending = ValueNotifier(null);
   final ValueNotifier<BeamSession?> session = ValueNotifier(null);
@@ -123,6 +137,15 @@ class ConnectionService {
     }
   }
 
+  Map<String, Object> _me() {
+    final s = _settings.value;
+    return {
+      'id': _trust.deviceId,
+      'name': s.deviceName,
+      'platform': DiscoveryService.platform,
+    };
+  }
+
   Future<void> _handshakeAsHost(SignalingChannel ch, String address) async {
     final s = _settings.value;
     final nonce = PairingService.newNonce();
@@ -130,8 +153,7 @@ class ConnectionService {
       't': 'challenge',
       'v': SignalingChannel.protocolVersion,
       'nonce': nonce,
-      'name': s.deviceName,
-      'platform': DiscoveryService.platform,
+      ..._me(),
     });
 
     final hello = await ch.next('hello', timeout: const Duration(seconds: 20));
@@ -152,20 +174,41 @@ class ConnectionService {
       _reject(ch, 'Invalid request');
     }
     final safeName = _clean(name, 40);
-    final code = _pairing.code.value;
-    if (!_pairing.verify(nonce, id, proof)) {
-      _reject(ch, 'Wrong pairing code');
+    final safePlatform = _clean(platform, 16);
+
+    // Either a trust key (no code) or the current pairing code.
+    final String key;
+    final bool usedTrust;
+    if (hello['trusted'] == true) {
+      final secret = _trust.secretFor(id);
+      if (secret == null ||
+          !PairingService.constantTimeEquals(
+              PairingService.proof(secret, nonce, id), proof)) {
+        _reject(ch, '${s.deviceName} no longer trusts this device. '
+            'Enter its pairing code.', code: 'untrusted');
+      }
+      key = secret;
+      usedTrust = true;
+    } else {
+      key = _pairing.code.value;
+      usedTrust = false;
+      if (!_pairing.verify(nonce, id, proof)) {
+        _reject(ch, 'Wrong pairing code');
+      }
     }
     if (mode == StreamMode.view && !ScreenCapture.supported) {
       _reject(ch, ScreenCapture.unsupportedReason);
     }
 
-    if (s.requireApproval) {
+    var grantTrust = false;
+    final skipApproval = usedTrust && s.autoConnectTrusted;
+    if (s.requireApproval && !skipApproval) {
       final req = IncomingRequest(
         name: safeName,
-        platform: _clean(platform, 16),
+        platform: safePlatform,
         address: address,
         mode: mode,
+        alreadyTrusted: usedTrust,
       );
       pending.value = req;
       // If the other device gives up while waiting, close the prompt.
@@ -177,10 +220,11 @@ class ConnectionService {
       });
       pending.value = null;
       if (!ok) _reject(ch, '${s.deviceName} declined the request');
+      grantTrust = req.trust && !usedTrust;
     }
 
     // One-time code: the next pairing needs a new one.
-    _pairing.regenerate();
+    if (!usedTrust) _pairing.regenerate();
 
     final own = StreamQuality.fromSettings(_settings.value);
     ch.send({
@@ -190,24 +234,39 @@ class ConnectionService {
     });
 
     final role = mode == StreamMode.view ? SessionRole.sharer : SessionRole.viewer;
-    final quality = role == SessionRole.sharer
-        ? StreamQuality.fromJson(hello['quality'], own)
-        : own;
+    Map<String, Object>? trustPayload;
+    if (grantTrust) {
+      final secret = _trust.trust(id: id, name: safeName, platform: safePlatform);
+      trustPayload = {..._me(), 'secret': secret};
+    }
     _begin(BeamSession(
       role: role,
       peerName: safeName,
       channel: ch,
-      code: code,
-      quality: quality,
+      code: key,
+      quality: role == SessionRole.sharer
+          ? StreamQuality.fromJson(hello['quality'], own)
+          : own,
+      link: DataLink(
+        peerName: safeName,
+        settings: _settings,
+        transfers: _transfers,
+        trust: _trust,
+        expectedPeerId: id,
+        trustToSend: trustPayload,
+      ),
     ));
   }
 
-  /// Connects to [peer] using the pairing [code] shown on it.
-  /// Completes when the other device accepts; throws with a readable
-  /// message otherwise.
+  /// True if [peer] gave this device a trust key, so no code is needed.
+  bool isTrustedBy(PeerDevice peer) => _trust.keyFor(peer.id) != null;
+
+  /// Connects to [peer] with the pairing [code] shown on it, or with a
+  /// saved trust key if [code] is null. Completes when the other device
+  /// accepts; throws a [SignalingException] with a readable message otherwise.
   Future<BeamSession> connect({
     required PeerDevice peer,
-    required String code,
+    required String? code,
     required StreamMode mode,
   }) async {
     if (busy) throw SignalingException('Finish the current session first');
@@ -236,40 +295,61 @@ class ConnectionService {
   }
 
   Future<BeamSession> _handshakeAsClient(SignalingChannel ch, PeerDevice peer,
-      String code, StreamMode mode) async {
+      String? code, StreamMode mode) async {
     final challenge =
         await ch.next('challenge', timeout: const Duration(seconds: 10));
     final nonce = challenge['nonce'];
-    if (nonce is! String || nonce.length > 100) {
-      throw SignalingException('Not a BeamX device');
+    final hostId = challenge['id'];
+    if (nonce is! String || nonce.length > 100 ||
+        hostId is! String || hostId.length > 64) {
+      throw SignalingException('Not a BeamX device, or an older BeamX version');
     }
+    final trustKey = code == null ? _trust.keyFor(hostId) : null;
+    final key = code ?? trustKey;
+    if (key == null) {
+      throw SignalingException('Enter the pairing code shown on ${peer.name}',
+          code: 'need-code');
+    }
+
     final s = _settings.value;
     final own = StreamQuality.fromSettings(s);
     ch.send({
       't': 'hello',
       'v': SignalingChannel.protocolVersion,
-      'id': _discovery.selfId,
-      'name': s.deviceName,
-      'platform': DiscoveryService.platform,
+      ..._me(),
       'mode': mode.name,
-      'proof': PairingService.proof(code, nonce, _discovery.selfId),
+      'trusted': trustKey != null,
+      'proof': PairingService.proof(key, nonce, _trust.deviceId),
       if (mode == StreamMode.view) 'quality': own.toJson(),
     });
 
     // Waits while the other person decides.
-    final accept =
-        await ch.next('accept', timeout: const Duration(seconds: 75));
+    final Map<String, dynamic> accept;
+    try {
+      accept = await ch.next('accept', timeout: const Duration(seconds: 75));
+    } on SignalingException catch (e) {
+      if (e.code == 'untrusted') _trust.forgetKey(hostId);
+      rethrow;
+    }
     final role =
         mode == StreamMode.view ? SessionRole.viewer : SessionRole.sharer;
     final acceptName = accept['name'];
+    final peerName = acceptName is String ? _clean(acceptName, 40) : peer.name;
     final session = BeamSession(
       role: role,
-      peerName: acceptName is String ? _clean(acceptName, 40) : peer.name,
+      peerName: peerName,
       channel: ch,
-      code: code,
+      code: key,
       quality: role == SessionRole.sharer
           ? StreamQuality.fromJson(accept['quality'], own)
           : own,
+      link: DataLink(
+        peerName: peerName,
+        settings: _settings,
+        transfers: _transfers,
+        trust: _trust,
+        expectedPeerId: hostId,
+      ),
     );
     _begin(session);
     return session;
@@ -283,9 +363,9 @@ class ConnectionService {
     });
   }
 
-  Never _reject(SignalingChannel ch, String reason) {
-    ch.send({'t': 'reject', 'reason': reason});
-    throw SignalingException(reason);
+  Never _reject(SignalingChannel ch, String reason, {String? code}) {
+    ch.send({'t': 'reject', 'reason': reason, 'code': ?code});
+    throw SignalingException(reason, code: code);
   }
 
   static String _clean(String s, int max) {

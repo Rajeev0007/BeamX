@@ -8,11 +8,15 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../app_scope.dart';
 import '../models/peer_device.dart';
 import '../services/connection_service.dart';
+import '../services/discovery_service.dart';
 import '../services/screen_capture.dart';
+import '../services/signaling.dart';
 
-Future<void> showPairingSheet(BuildContext context, {PeerDevice? peer}) {
-  final Widget sheet =
-      peer == null ? const _MyCodeSheet() : _ConnectSheet(peer: peer);
+Future<void> showPairingSheet(BuildContext context,
+    {PeerDevice? peer, String? code}) {
+  final Widget sheet = peer == null
+      ? const _MyCodeSheet()
+      : _ConnectSheet(peer: peer, initialCode: code);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -115,19 +119,24 @@ class _MyCodeSheetState extends State<_MyCodeSheet> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: QrImageView(
-                data: jsonEncode({
-                  'app': 'beamx',
-                  'id': scope.discovery.selfId,
-                  'name': s.deviceName,
-                  'port': s.port,
-                  'code': code,
-                }),
-                size: 160,
+              child: FutureBuilder<List<String>>(
+                future: _addresses,
+                builder: (context, snap) => QrImageView(
+                  data: jsonEncode({
+                    'app': 'beamx',
+                    'id': scope.discovery.selfId,
+                    'name': s.deviceName,
+                    'platform': DiscoveryService.platform,
+                    'port': s.port,
+                    'addrs': snap.data ?? const <String>[],
+                    'code': code,
+                  }),
+                  size: 160,
+                ),
               ),
             ),
             const SizedBox(height: 6),
-            Text('QR scanning arrives in a later update',
+            Text('Scan with BeamX on a phone, tablet or Mac',
                 style: t.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
             const Divider(height: 32),
             Align(
@@ -183,8 +192,9 @@ class _MyCodeSheetState extends State<_MyCodeSheet> {
 
 /// Choose a direction, enter the other device's code and connect.
 class _ConnectSheet extends StatefulWidget {
-  const _ConnectSheet({required this.peer});
+  const _ConnectSheet({required this.peer, this.initialCode});
   final PeerDevice peer;
+  final String? initialCode;
 
   @override
   State<_ConnectSheet> createState() => _ConnectSheetState();
@@ -193,9 +203,13 @@ class _ConnectSheet extends StatefulWidget {
 class _ConnectSheetState extends State<_ConnectSheet> {
   late StreamMode _mode =
       _canView ? StreamMode.view : StreamMode.share;
-  final _code = TextEditingController();
+  late final _code = TextEditingController(text: widget.initialCode);
   bool _connecting = false;
   String? _error;
+
+  /// The other device trusts this one, so no code is needed.
+  late bool _trusted = widget.initialCode == null &&
+      AppScope.of(context).connection.isTrustedBy(widget.peer);
 
   bool get _canView => widget.peer.platform != 'ios';
   bool get _canShare => ScreenCapture.supported;
@@ -206,7 +220,8 @@ class _ConnectSheetState extends State<_ConnectSheet> {
     super.dispose();
   }
 
-  bool get _codeValid => RegExp(r'^\d{6}$').hasMatch(_code.text);
+  bool get _codeValid =>
+      _trusted || RegExp(r'^\d{6}$').hasMatch(_code.text);
 
   Future<void> _connect() async {
     setState(() {
@@ -218,7 +233,7 @@ class _ConnectSheetState extends State<_ConnectSheet> {
     try {
       await AppScope.of(context).connection.connect(
             peer: widget.peer,
-            code: _code.text,
+            code: _trusted ? null : _code.text,
             mode: _mode,
           );
       // The app has already opened the streaming screen on top, so remove
@@ -230,6 +245,11 @@ class _ConnectSheetState extends State<_ConnectSheet> {
       setState(() {
         _connecting = false;
         _error = '$e';
+        // Trust was removed on the other side: fall back to the code.
+        if (e is SignalingException &&
+            (e.code == 'untrusted' || e.code == 'need-code')) {
+          _trusted = false;
+        }
       });
     }
   }
@@ -296,6 +316,22 @@ class _ConnectSheetState extends State<_ConnectSheet> {
             ),
           ],
           const SizedBox(height: 20),
+          if (_trusted) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.verified_user_rounded, color: scheme.primary),
+              title: const Text('Trusted: no code needed'),
+              subtitle: _error == null
+                  ? null
+                  : Text(_error!, style: TextStyle(color: scheme.error)),
+              trailing: TextButton(
+                onPressed: _connecting
+                    ? null
+                    : () => setState(() => _trusted = false),
+                child: const Text('Use code'),
+              ),
+            ),
+          ] else ...[
           Text('Pairing code shown on ${peer.name}',
               style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
@@ -318,6 +354,7 @@ class _ConnectSheetState extends State<_ConnectSheet> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
+          ],
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
