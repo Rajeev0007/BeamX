@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Animated "searching" pulse shown while looking for nearby devices.
 class Radar extends StatefulWidget {
