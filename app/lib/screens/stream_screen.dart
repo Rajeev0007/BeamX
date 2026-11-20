@@ -9,6 +9,7 @@ import '../services/data_link.dart';
 import '../services/input/input_injector.dart';
 import '../services/screen_capture.dart';
 import '../services/settings_store.dart';
+import '../services/window_control.dart';
 import '../widgets/remote_surface.dart';
 
 /// Full-screen view of a live session with an auto-hiding toolbar.
@@ -32,6 +33,12 @@ class _StreamScreenState extends State<StreamScreen> {
 
   /// Viewer: whether our input goes to the other device (when it allows).
   bool _controlOn = true;
+  bool _fullScreen = false;
+
+  void _toggleFullScreen() {
+    setState(() => _fullScreen = !_fullScreen);
+    WindowControl.setFullScreen(_fullScreen);
+  }
 
   BeamSession get s => widget.session;
 
@@ -49,6 +56,7 @@ class _StreamScreenState extends State<StreamScreen> {
     if (_settings != null) return;
     _settings = AppScope.of(context).settings..addListener(_onSettings);
     _controlOn = !_settings!.value.viewOnly;
+    if (!s.isSharer && _settings!.value.alwaysOnTop) WindowControl.setOnTop(true);
   }
 
   @override
@@ -56,6 +64,8 @@ class _StreamScreenState extends State<StreamScreen> {
     _hideTimer?.cancel();
     s.removeListener(_onSession);
     _settings?.removeListener(_onSettings);
+    WindowControl.setOnTop(false);
+    if (_fullScreen) WindowControl.setFullScreen(false);
     // Leaving the screen ends the session.
     s.close('You ended the session');
     super.dispose();
@@ -65,6 +75,8 @@ class _StreamScreenState extends State<StreamScreen> {
     final store = _settings;
     if (!mounted || s.isSharer || store == null) return;
     s.requestQuality(StreamQuality.fromSettings(store.value));
+    WindowControl.setOnTop(store.value.alwaysOnTop);
+    setState(() {}); // e.g. new scroll speed
   }
 
   void _onSession() {
@@ -163,7 +175,12 @@ class _StreamScreenState extends State<StreamScreen> {
     return ValueListenableBuilder<RemoteControlStatus>(
       valueListenable: s.link.remote,
       builder: (context, remote, _) => remote.allowed && _controlOn
-          ? RemoteSurface(renderer: s.renderer, link: s.link, child: video)
+          ? RemoteSurface(
+              renderer: s.renderer,
+              link: s.link,
+              scrollSpeed: _settings?.value.pointerSpeed ?? 1.0,
+              child: video,
+            )
           : InteractiveViewer(maxScale: 5, child: video),
     );
   }
@@ -281,6 +298,14 @@ class _StreamScreenState extends State<StreamScreen> {
                 icon: s.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
                 tooltip: s.muted ? 'Unmute sound' : 'Mute sound',
                 onTap: () => s.setMuted(!s.muted),
+              ),
+            if (!s.isSharer)
+              _ToolButton(
+                icon: _fullScreen
+                    ? Icons.fullscreen_exit_rounded
+                    : Icons.fullscreen_rounded,
+                tooltip: _fullScreen ? 'Exit full screen' : 'Full screen',
+                onTap: _toggleFullScreen,
               ),
             if (!s.isSharer)
               _ToolButton(

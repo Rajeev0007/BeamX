@@ -8,9 +8,11 @@ import 'services/pairing_service.dart';
 import 'services/settings_store.dart';
 import 'services/transfer_service.dart';
 import 'services/trust_store.dart';
+import 'services/window_control.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await WindowControl.init();
   final settings = await SettingsStore.load();
   final trust = await TrustStore.load();
   final discovery = DiscoveryService(settings, trust.deviceId);

@@ -67,6 +67,15 @@
 - [x] Your own server stays available for reliability and mobile networks (TURN)
 - [x] Internet connections check that the answering device really owns the dialed ID
 
+## v0.9.1: Every setting works
+- [x] Keep stream window on top (computers)
+- [x] Full screen button on the viewer (all platforms)
+- [x] Scroll speed applies when controlling
+- [x] Removed settings that couldn't work yet: encoder choice (the video
+      library picks the hardware encoder), phone screen off while mirroring
+      (Android doesn't allow apps to do this), connection type (BeamX always
+      picks the best connection automatically)
+
 ## Later
 - [ ] Recording on Windows and Linux
 - [ ] Phone as webcam, microphone or second monitor
