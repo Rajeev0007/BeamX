@@ -65,13 +65,15 @@ can override Play Protect. Your options are:
 2. If you see **"Windows protected your PC"**, click **More info → Run anyway**.
    This message appears until BeamX's free code-signing certificate is approved.
 3. Click **Yes** when Windows asks for permission, then follow the steps.
-   The installer adds BeamX to the Start menu and allows it through the
-   firewall on private (home) networks, so there's no firewall popup.
+   The installer adds BeamX to the Start menu and allows it through Windows
+   Defender Firewall, so there's no firewall popup. (Windows 11 often marks
+   home Wi-Fi as "Public"; the rule covers both.)
 
 **Portable zip (no install):**
 1. Download `BeamX-windows-x64.zip`, extract it and open `beamx.exe`.
-2. When **Windows Defender Firewall** asks, tick **Private networks** and
-   click **Allow access**. Without this, other devices can't connect to this PC.
+2. When **Windows Defender Firewall** asks, tick **both Private and Public
+   networks** and click **Allow access**. Without this, other devices can't
+   connect to this PC. Windows 11 often marks home Wi-Fi as Public.
 
 Remote control can't reach apps running **as administrator** unless BeamX
 is also run as administrator. This is a Windows security rule.

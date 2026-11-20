@@ -164,13 +164,56 @@ class BeamSession extends ChangeNotifier {
   /// True while the connection is interrupted and BeamX is trying to
   /// restore it.
   bool reconnecting = false;
+  final Map<String, int> _localCandidates = {};
+  final Map<String, int> _remoteCandidates = {};
+
+  /// Logs which network path WebRTC chose (direct, relay, …).
+  Future<void> _logRoute() async {
+    try {
+      final reports = await _pc!.getStats();
+      final byId = {for (final r in reports) r.id: r};
+      for (final r in reports) {
+        final v = r.values;
+        if (r.type == 'candidate-pair' && v['state'] == 'succeeded' &&
+            (v['nominated'] == true || v['nominated'] == 'true')) {
+          final l = byId[v['localCandidateId']]?.values;
+          final rm = byId[v['remoteCandidateId']]?.values;
+          DiagLog.add('route: local ${l?['candidateType']}/${l?['protocol']} '
+              '${l?['networkType'] ?? ''} → remote ${rm?['candidateType']}/${rm?['protocol']}');
+          return;
+        }
+      }
+    } catch (_) {}
+  }
+
   Timer? _graceTimer;
   Timer? _connectTimer;
   Timer? _restartTimer;
   bool _everConnected = false;
 
+  /// The native WebRTC library initialises itself on the first connection;
+  /// two at the same moment can crash it, so they're created one by one.
+  static Future<void> _pcLock = Future.value();
+
+  static Future<RTCPeerConnection> _createPeerConnectionSerialized(
+      Map<String, dynamic> config) {
+    final c = Completer<RTCPeerConnection>();
+    _pcLock = _pcLock.then((_) async {
+      try {
+        c.complete(await createPeerConnection(config));
+      } catch (e, st) {
+        c.completeError(e, st);
+      }
+    });
+    return c.future;
+  }
+
   /// Signaling messages are handled one at a time, in order.
   Future<void> _messageChain = Future.value();
+
+  static const couldNotConnect =
+      'Could not connect the video. A firewall, VPN or guest Wi-Fi may be '
+      'blocking the devices from reaching each other.';
 
   /// How long to keep trying after the connection drops.
   static const _grace = Duration(seconds: 30);
@@ -305,17 +348,23 @@ class BeamSession extends ChangeNotifier {
 
   Future<void> start() async {
     try {
+      DiagLog.add('step: ${isSharer ? 'sharer' : 'viewer'} session starting');
       await renderer.initialize();
-      final pc = await createPeerConnection(<String, dynamic>{
+      DiagLog.add('step: renderer ready');
+      final pc = await _createPeerConnectionSerialized(<String, dynamic>{
         // Local network: none, so no outside server is contacted.
         // Internet: the relay's STUN and TURN servers.
         'iceServers': iceServers,
         'sdpSemantics': 'unified-plan',
       });
       _pc = pc;
+      DiagLog.add('step: peer connection created');
 
       pc.onIceCandidate = (c) {
         if (c.candidate == null) return;
+        final type = RegExp(r' typ (\w+)').firstMatch(c.candidate!)?.group(1) ?? '?';
+        final proto = c.candidate!.toLowerCase().contains(' tcp ') ? 'tcp' : 'udp';
+        _localCandidates['$type/$proto'] = (_localCandidates['$type/$proto'] ?? 0) + 1;
         _channel.send({
           't': 'ice',
           'candidate': c.candidate,
@@ -338,7 +387,13 @@ class BeamSession extends ChangeNotifier {
             break;
         }
       };
-      pc.onIceConnectionState = (s) => DiagLog.add('ice state: ${s.name}');
+      pc.onIceConnectionState = (s) {
+        DiagLog.add('ice state: ${s.name} (local candidates: $_localCandidates, '
+            'remote: $_remoteCandidates)');
+        if (s == RTCIceConnectionState.RTCIceConnectionStateConnected) {
+          unawaited(_logRoute());
+        }
+      };
       pc.onDataChannel = (dc) {
         if (dc.label == 'beamx') link.attach(dc);
         if (dc.label == 'beamx-input') link.attachInput(dc);
@@ -358,6 +413,7 @@ class BeamSession extends ChangeNotifier {
 
       // Messages from the other device can also arrive over the data
       // channel, which keeps working if the setup connection drops.
+      DiagLog.add('step: handlers set');
       link.onSessionMessage = _enqueueMessage;
       _messages = _channel.rest().listen(_enqueueMessage, onDone: _signalingLost);
       unawaited(_channel.closed.then((_) => _signalingLost()));
@@ -366,9 +422,7 @@ class BeamSession extends ChangeNotifier {
       // If the video never connects (blocked network, crashed peer), don't
       // leave both devices waiting forever.
       _connectTimer = Timer(const Duration(seconds: 40), () {
-        if (!_everConnected) {
-          close('Could not connect. The devices may be on networks that block direct connections.');
-        }
+        if (!_everConnected) close(couldNotConnect);
       });
       _statsTimer =
           Timer.periodic(const Duration(seconds: 1), (_) => _pollStats());
@@ -378,30 +432,38 @@ class BeamSession extends ChangeNotifier {
   }
 
   Future<void> _startSharing(RTCPeerConnection pc) async {
+    DiagLog.add('step: starting screen capture');
     final stream = await ScreenCapture.start(
         fps: _quality.fps, audio: _quality.audio);
+    DiagLog.add('step: capture started (${stream.getVideoTracks().length} video, '
+        '${stream.getAudioTracks().length} audio)');
     _localStream = stream;
     renderer.srcObject = stream; // local preview
     final track = stream.getVideoTracks().first;
     track.onEnded = () => close('Screen sharing was stopped');
     _sender = await pc.addTrack(track, stream);
+    DiagLog.add('step: video track added');
     for (final a in stream.getAudioTracks()) {
       await pc.addTrack(a, stream);
     }
     sendingAudio = stream.getAudioTracks().isNotEmpty;
     await _preferCodec(pc, _quality.codec);
+    DiagLog.add('step: codec set');
     link.attach(await pc.createDataChannel(
         'beamx', RTCDataChannelInit()..ordered = true));
     link.attachInput(await pc.createDataChannel(
         'beamx-input', RTCDataChannelInit()..ordered = true));
+    DiagLog.add('step: data channels created');
     // A receive-only audio slot, so the viewer can send its microphone.
     await pc.addTransceiver(
       kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
       init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
     );
+    DiagLog.add('step: mic slot added');
 
     final offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    DiagLog.add('step: offer created');
     _channel.send({
       't': 'offer',
       'sdp': offer.sdp,
@@ -445,7 +507,7 @@ class BeamSession extends ChangeNotifier {
   void _interrupted({required bool restart}) {
     if (phase == SessionPhase.ended) return;
     if (!_everConnected) {
-      if (restart) close('Could not connect. The devices may be on networks that block direct connections.');
+      if (restart) close(couldNotConnect);
       return;
     }
     if (!reconnecting) {
@@ -490,7 +552,9 @@ class BeamSession extends ChangeNotifier {
       switch (m['t']) {
         case 'offer' when !isSharer:
           final sdp = _verifiedSdp(m);
+          DiagLog.add('step: offer received');
           await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
+          DiagLog.add('step: offer applied');
           await _flushIce(pc);
           if (wantMic && _mic == null) await _attachMic(pc, sdp);
           final answer = await pc.createAnswer();
@@ -515,6 +579,8 @@ class BeamSession extends ChangeNotifier {
           final mid = m['sdpMid'];
           final idx = m['sdpMLineIndex'];
           if (c is! String || c.length > 1024) return;
+          final type = RegExp(r' typ (\w+)').firstMatch(c)?.group(1) ?? '?';
+          _remoteCandidates[type] = (_remoteCandidates[type] ?? 0) + 1;
           final cand = RTCIceCandidate(
               c, mid is String ? mid : null, idx is int ? idx : null);
           if (_remoteSet) {

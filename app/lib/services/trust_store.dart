@@ -75,6 +75,13 @@ class TrustStore {
   /// Devices that let this device connect to them without a code.
   final ValueNotifier<List<TrustedDevice>> trustsMe;
 
+  /// A store with a fixed device ID, for running two devices in one test.
+  @visibleForTesting
+  static Future<TrustStore> forTest(String deviceId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return TrustStore._(prefs, deviceId, randomHex(32), {}, {});
+  }
+
   static Future<TrustStore> load() async {
     final prefs = await SharedPreferences.getInstance();
     var id = prefs.getString(_idKey);

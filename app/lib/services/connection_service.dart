@@ -243,12 +243,30 @@ class ConnectionService {
     }
   }
 
+  static const _appVersion =
+      String.fromEnvironment('BEAMX_VERSION', defaultValue: 'dev');
+
+  /// The other device's BeamX version, if it differs from ours.
+  final ValueNotifier<String?> versionMismatch = ValueNotifier(null);
+
+  void _checkVersion(Object? theirs, String name) {
+    final v = theirs is String && theirs.length <= 32 ? theirs : 'older than 1.0.1';
+    if (v != _appVersion && v != 'dev' && _appVersion != 'dev') {
+      DiagLog.add('version mismatch: this device $_appVersion, $name $v');
+      versionMismatch.value = '$name runs BeamX $v and this device runs '
+          '$_appVersion. Install the same version on both if anything goes wrong.';
+    } else {
+      versionMismatch.value = null;
+    }
+  }
+
   Map<String, Object> _me() {
     final s = _settings.value;
     return {
       'id': _trust.deviceId,
       'name': s.deviceName,
       'platform': DiscoveryService.platform,
+      'app': _appVersion,
     };
   }
 
@@ -282,6 +300,7 @@ class ConnectionService {
     }
     final safeName = _clean(name, 40);
     final safePlatform = _clean(platform, 16);
+    _checkVersion(hello['app'], safeName);
 
     // A trust key, the owner's password, or the current pairing code.
     final String key;
@@ -544,6 +563,7 @@ class ConnectionService {
         mode == StreamMode.view ? SessionRole.viewer : SessionRole.sharer;
     final acceptName = accept['name'];
     final peerName = acceptName is String ? _clean(acceptName, 40) : peer.name;
+    _checkVersion(challenge['app'], peerName);
     final session = BeamSession(
       role: role,
       peerName: peerName,

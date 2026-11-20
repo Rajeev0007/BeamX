@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:material_ui/material_ui.dart';
@@ -9,6 +10,9 @@ import 'package:material_ui/material_ui.dart';
 import '../app_scope.dart';
 import '../services/beam_session.dart';
 import '../services/data_link.dart';
+import '../services/diag_log.dart';
+import '../services/discovery_service.dart';
+import '../services/prompts.dart';
 import '../services/input/input_injector.dart';
 import '../services/screen_capture.dart';
 import '../services/settings_store.dart';
@@ -106,7 +110,14 @@ class _StreamScreenState extends State<StreamScreen> {
         if (!route.isCurrent) nav.popUntil((r) => r == route);
         nav.removeRoute(route);
       }
-      if (reason != null && reason != 'You ended the session') {
+      final failed = reason != null &&
+          (reason == BeamSession.couldNotConnect ||
+              reason.startsWith('Connection lost') ||
+              reason.startsWith('Could not'));
+      if (failed) {
+        // Real failures get an explanation and the log, not a toast.
+        WidgetsBinding.instance.addPostFrameCallback((_) => _showFailure(reason));
+      } else if (reason != null && reason != 'You ended the session') {
         messenger.showSnackBar(SnackBar(
           content: Text(reason),
           behavior: SnackBarBehavior.floating,
@@ -115,6 +126,45 @@ class _StreamScreenState extends State<StreamScreen> {
       return;
     }
     setState(() {});
+  }
+
+  static void _showFailure(String reason) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    showDialog<void>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        icon: const Icon(Icons.wifi_off_rounded, size: 36),
+        title: const Text('The connection didn\'t work'),
+        content: SingleChildScrollView(
+          child: Text('$reason\n\n'
+              'Things to check:\n'
+              '• Both devices run the same BeamX version.\n'
+              '• Windows: reinstall with the latest BeamX-windows-setup.exe, or '
+              'allow BeamX in Windows Defender Firewall for Private and Public '
+              'networks.\n'
+              '• Turn off VPN apps on both devices.\n'
+              '• Guest or office Wi-Fi often blocks devices from talking to '
+              'each other: try a phone hotspot.\n\n'
+              'If it still fails, tap Copy log and send it to the developer.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(
+                  text: 'BeamX ${DiscoveryService.platform}\n${DiagLog.text}'));
+              ScaffoldMessenger.of(d).showSnackBar(
+                  const SnackBar(content: Text('Diagnostics log copied')));
+            },
+            child: const Text('Copy log'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _scheduleHide() {
