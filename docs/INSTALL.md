@@ -9,8 +9,13 @@ You can confirm the file is genuine with [the steps at the end](#verify-your-dow
 
 ## Android
 
-1. Download `BeamX-android.apk` on your phone
-   (in preview releases it's named `BeamX-android-preview.apk`).
+1. Download the APK on your phone:
+   - `BeamX-android-arm64.apk`: most phones from 2017 onwards (smallest download)
+   - `BeamX-android-armv7.apk`: older phones
+   - `BeamX-android.apk`: works on every phone, but is larger
+
+   Stay with the same type for updates. Switching from the arm64 or armv7
+   file back to `BeamX-android.apk` needs an uninstall first.
 2. Open it. If asked, tap **Settings** and turn on **Allow from this source**
    for your browser or file manager.
 3. Tap **Install**. If Play Protect shows a warning about an unknown app,
@@ -21,6 +26,15 @@ When you first share your screen, Android asks:
 - **Start recording or casting with BeamX?**: choose **Entire screen** and tap **Start**.
 - **Run in background** (battery optimisation): tap **Allow**, so sharing
   doesn't stop when you switch apps.
+
+To let a computer **control this phone**:
+1. Open **Settings → Accessibility → Installed apps** (or **Downloaded apps**)
+   and turn on **BeamX remote control**.
+2. If Android says **Restricted setting**, open **Settings → Apps → BeamX**,
+   tap **⋮ → Allow restricted settings**, then repeat step 1.
+
+BeamX's sharing screen shows an **Open settings** button for this. The
+service only acts while you allow remote control in a session.
 
 If your installed BeamX is named `BeamX-android-preview.apk` (v0.1.0-preview),
 uninstall it before installing a newer version. It used a temporary signing key.
@@ -34,6 +48,9 @@ uninstall it before installing a newer version. It used a temporary signing key.
 4. When **Windows Defender Firewall** asks, tick **Private networks** and
    click **Allow access**. Without this, other devices can't connect to this PC.
 
+Remote control can't reach apps running **as administrator** unless BeamX
+is also run as administrator. This is a Windows security rule.
+
 ## macOS
 
 1. Download `BeamX-macos.dmg`, open it and drag **BeamX** into **Applications**.
@@ -45,6 +62,8 @@ uninstall it before installing a newer version. It used a temporary signing key.
    then reopen BeamX.
 4. If macOS asks whether BeamX may find devices on your local network,
    click **Allow**.
+5. To let another device **control this Mac**, allow BeamX in
+   **System Settings → Privacy & Security → Accessibility**.
 
 ## Linux
 
@@ -53,8 +72,9 @@ mkdir -p ~/BeamX && tar -xzf BeamX-linux-x64.tar.gz -C ~/BeamX
 ~/BeamX/beamx
 ```
 
-Screen sharing from Linux works best in an **X11** session. On Wayland,
-sharing may not work yet; viewing other screens works on both.
+Screen sharing and remote control of Linux need an **X11** session. On
+Wayland they may not work yet; viewing and controlling other screens works
+on both.
 
 ## iOS (iPhone / iPad)
 
@@ -71,7 +91,7 @@ AltStore and SideStore can do this automatically.
 When BeamX asks to find devices on your local network, tap **Allow**.
 
 **iOS limitations:**
-- An iPhone or iPad can **view** other screens. Sharing the iPhone's own
+- An iPhone or iPad can **view and control** other screens. Sharing the iPhone's own
   screen isn't available yet.
 - Apple does not let any app control an iPhone remotely.
 - iPhones can't discover devices automatically. On the other device, tap

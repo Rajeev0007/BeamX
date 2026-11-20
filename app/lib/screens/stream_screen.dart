@@ -5,7 +5,10 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
 import '../services/beam_session.dart';
+import '../services/data_link.dart';
+import '../services/input/input_injector.dart';
 import '../services/settings_store.dart';
+import '../widgets/remote_surface.dart';
 
 /// Full-screen view of a live session with an auto-hiding toolbar.
 ///
@@ -26,6 +29,9 @@ class _StreamScreenState extends State<StreamScreen> {
   bool _popped = false;
   SettingsStore? _settings;
 
+  /// Viewer: whether our input goes to the other device (when it allows).
+  bool _controlOn = true;
+
   BeamSession get s => widget.session;
 
   @override
@@ -41,6 +47,7 @@ class _StreamScreenState extends State<StreamScreen> {
     // The viewer's quality settings drive the stream.
     if (_settings != null) return;
     _settings = AppScope.of(context).settings..addListener(_onSettings);
+    _controlOn = !_settings!.value.viewOnly;
   }
 
   @override
@@ -116,6 +123,13 @@ class _StreamScreenState extends State<StreamScreen> {
                   if (s.isSharer)
                     const Positioned(
                         top: 16, left: 0, right: 0, child: _SharingPill()),
+                  if (s.isSharer)
+                    Positioned(
+                      top: 64,
+                      left: 16,
+                      right: 16,
+                      child: _ControlProblem(session: s),
+                    ),
                   if (showStats)
                     Positioned(
                       top: s.isSharer ? 64 : 16,
@@ -140,13 +154,16 @@ class _StreamScreenState extends State<StreamScreen> {
   }
 
   Widget _viewerView() {
-    return InteractiveViewer(
-      maxScale: 5,
-      child: RTCVideoView(
-        s.renderer,
-        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-        filterQuality: FilterQuality.medium,
-      ),
+    final video = RTCVideoView(
+      s.renderer,
+      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+      filterQuality: FilterQuality.medium,
+    );
+    return ValueListenableBuilder<RemoteControlStatus>(
+      valueListenable: s.link.remote,
+      builder: (context, remote, _) => remote.allowed && _controlOn
+          ? RemoteSurface(renderer: s.renderer, link: s.link, child: video)
+          : InteractiveViewer(maxScale: 5, child: video),
     );
   }
 
@@ -193,7 +210,9 @@ class _StreamScreenState extends State<StreamScreen> {
 
   Widget _toolbar(BuildContext context, bool showStats) {
     final store = AppScope.of(context).settings;
-    return Material(
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Material(
       color: Colors.black.withValues(alpha: 0.7),
       shape: const StadiumBorder(),
       elevation: 8,
@@ -229,8 +248,68 @@ class _StreamScreenState extends State<StreamScreen> {
                 tooltip: 'Quality',
                 onTap: () => _qualitySheet(context),
               ),
+            if (s.isSharer)
+              ValueListenableBuilder<bool>(
+                valueListenable: s.link.controlAllowed,
+                builder: (context, allowed, _) => _ToolButton(
+                  icon: allowed ? Icons.mouse_rounded : Icons.mouse_outlined,
+                  tooltip: allowed
+                      ? 'Remote control is on: tap to turn off'
+                      : 'Let ${s.peerName} control this device',
+                  active: allowed,
+                  onTap: InputInjector.create() == null
+                      ? null
+                      : () => s.link.setControlAllowed(!allowed),
+                ),
+              ),
+            if (!s.isSharer)
+              ValueListenableBuilder<RemoteControlStatus>(
+                valueListenable: s.link.remote,
+                builder: (context, remote, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (remote.allowed)
+                      _ToolButton(
+                        icon: _controlOn
+                            ? Icons.mouse_rounded
+                            : Icons.mouse_outlined,
+                        tooltip: _controlOn
+                            ? 'Controlling: tap to only watch'
+                            : 'Watching: tap to control',
+                        active: _controlOn,
+                        onTap: () => setState(() => _controlOn = !_controlOn),
+                      ),
+                    if (remote.allowed && _controlOn)
+                      _ToolButton(
+                        icon: Icons.keyboard_rounded,
+                        tooltip: 'Keyboard',
+                        onTap: () => showRemoteKeyboard(context, s.link),
+                      ),
+                    if (remote.allowed && _controlOn &&
+                        remote.platform == 'android') ...[
+                      _ToolButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: 'Back',
+                        onTap: () => s.link.sendInput({'e': 'nav', 'a': 'back'}),
+                      ),
+                      _ToolButton(
+                        icon: Icons.circle_outlined,
+                        tooltip: 'Home',
+                        onTap: () => s.link.sendInput({'e': 'nav', 'a': 'home'}),
+                      ),
+                      _ToolButton(
+                        icon: Icons.crop_square_rounded,
+                        tooltip: 'Recent apps',
+                        onTap: () =>
+                            s.link.sendInput({'e': 'nav', 'a': 'recents'}),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -403,6 +482,51 @@ class _Stats extends StatelessWidget {
               Text('Rate   $mbps Mbps', style: style),
               Text('Ping   ${n(st.rttMs, ' ms')}', style: style),
             ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Sharer: explains what to allow in the OS before remote control works.
+class _ControlProblem extends StatelessWidget {
+  const _ControlProblem({required this.session});
+  final BeamSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: session.link.controlProblem,
+      builder: (context, problem, _) {
+        if (problem == null) return const SizedBox.shrink();
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Material(
+              color: Colors.amber.shade800,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Remote control needs permission. $problem',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: session.link.openControlSettings,
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
+                      child: const Text('Open settings'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       },
