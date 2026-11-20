@@ -61,7 +61,11 @@ class RemoteSurface extends StatefulWidget {
     required this.renderer,
     required this.link,
     required this.child,
+    this.scrollSpeed = 1.0,
   });
+
+  /// Multiplies scroll distances (Settings → Scroll speed).
+  final double scrollSpeed;
 
   final RTCVideoRenderer renderer;
   final DataLink link;
@@ -134,7 +138,8 @@ class _RemoteSurfaceState extends State<RemoteSurface> {
 
   void _onSignal(PointerSignalEvent e) {
     if (e is PointerScrollEvent) {
-      _send({'e': 'wheel', 'dx': e.scrollDelta.dx, 'dy': e.scrollDelta.dy});
+      final k = widget.scrollSpeed;
+      _send({'e': 'wheel', 'dx': e.scrollDelta.dx * k, 'dy': e.scrollDelta.dy * k});
     }
   }
 

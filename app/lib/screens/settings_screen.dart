@@ -100,15 +100,6 @@ final _entries = <_Entry>[
       onChanged: (v) => _setStream(st, (x) => x.copyWith(codec: v)),
     );
   }),
-  _Entry('Streaming', 'Encoder', 'gpu cpu hardware nvenc', (c, st, s) {
-    return _ChoiceRow<Encoder>(
-      title: 'Encoder',
-      icon: Icons.memory_rounded,
-      value: s.encoder,
-      options: const {Encoder.gpu: 'GPU (fast)', Encoder.cpu: 'CPU'},
-      onChanged: (v) => _setStream(st, (x) => x.copyWith(encoder: v)),
-    );
-  }),
 
   // Audio
   _Entry('Audio', 'Stream audio', 'sound', (c, st, s) {
@@ -140,15 +131,6 @@ final _entries = <_Entry>[
   }),
 
   // Connection
-  _Entry('Connection', 'Connection type', 'usb wifi hotspot internet auto', (c, st, s) {
-    return _DropdownRow<ConnectionMode>(
-      title: 'Connection type',
-      icon: Icons.cable_rounded,
-      value: s.connectionMode,
-      items: {for (final v in ConnectionMode.values) v: v.label},
-      onChanged: (v) => st.update((x) => x.copyWith(connectionMode: v)),
-    );
-  }),
   _Entry('Connection', 'Port', 'network advanced', (c, st, s) {
     return _TextRow(
       title: 'Port',
@@ -247,10 +229,10 @@ final _entries = <_Entry>[
   }),
 
   // Control & display
-  _Entry('Control & display', 'Pointer speed', 'mouse touch sensitivity', (c, st, s) {
+  _Entry('Control & display', 'Scroll speed', 'mouse wheel touch sensitivity pointer', (c, st, s) {
     return ListTile(
-      leading: const Icon(Icons.mouse_rounded),
-      title: Text('Pointer speed: ${s.pointerSpeed.toStringAsFixed(1)}×'),
+      leading: const Icon(Icons.swap_vert_rounded),
+      title: Text('Scroll speed when controlling: ${s.pointerSpeed.toStringAsFixed(1)}×'),
       subtitle: Slider(
         min: 0.2,
         max: 3,
@@ -277,19 +259,11 @@ final _entries = <_Entry>[
       onChanged: (v) => st.update((x) => x.copyWith(showStatsOverlay: v)),
     );
   }),
-  _Entry('Control & display', 'Phone screen off while mirroring', 'battery', (c, st, s) {
-    return SwitchListTile(
-      secondary: const Icon(Icons.screen_lock_portrait_rounded),
-      title: const Text('Phone screen off while mirroring'),
-      value: s.screenOffWhileMirroring,
-      onChanged: (v) =>
-          st.update((x) => x.copyWith(screenOffWhileMirroring: v)),
-    );
-  }),
   _Entry('Control & display', 'Always on top', 'window pc', (c, st, s) {
     return SwitchListTile(
       secondary: const Icon(Icons.picture_in_picture_rounded),
       title: const Text('Keep stream window on top'),
+      subtitle: const Text('Computers only: the viewing window stays above other apps'),
       value: s.alwaysOnTop,
       onChanged: (v) => st.update((x) => x.copyWith(alwaysOnTop: v)),
     );
