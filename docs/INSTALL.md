@@ -41,11 +41,17 @@ uninstall it before installing a newer version. It used a temporary signing key.
 
 ## Windows
 
-1. Download `BeamX-windows-x64.zip` and extract it.
-2. Open `beamx.exe`.
-3. If you see **"Windows protected your PC"**, click **More info → Run anyway**.
+**Installer (recommended):**
+1. Download `BeamX-windows-setup.exe` and open it.
+2. If you see **"Windows protected your PC"**, click **More info → Run anyway**.
    This message appears until BeamX's free code-signing certificate is approved.
-4. When **Windows Defender Firewall** asks, tick **Private networks** and
+3. Click **Yes** when Windows asks for permission, then follow the steps.
+   The installer adds BeamX to the Start menu and allows it through the
+   firewall on private (home) networks, so there's no firewall popup.
+
+**Portable zip (no install):**
+1. Download `BeamX-windows-x64.zip`, extract it and open `beamx.exe`.
+2. When **Windows Defender Firewall** asks, tick **Private networks** and
    click **Allow access**. Without this, other devices can't connect to this PC.
 
 Remote control can't reach apps running **as administrator** unless BeamX
@@ -67,6 +73,13 @@ is also run as administrator. This is a Windows security rule.
 
 ## Linux
 
+**Ubuntu, Debian, Mint and similar:**
+```
+sudo apt install ./BeamX-linux-amd64.deb
+```
+Then open **BeamX** from your app menu.
+
+**Any distribution (portable):**
 ```
 mkdir -p ~/BeamX && tar -xzf BeamX-linux-x64.tar.gz -C ~/BeamX
 ~/BeamX/beamx
@@ -98,6 +111,20 @@ When BeamX asks to find devices on your local network, tap **Allow**.
   **Pair** and connect by address, or connect from the iPhone by typing the
   other device's IP address.
 
+## Connecting without Wi-Fi
+
+Both devices need to be on the same network, but that network doesn't need a
+router or internet:
+
+- **Phone hotspot:** turn on the hotspot on your phone and join it from the
+  PC. Open BeamX on both; they find each other automatically.
+- **USB cable (Android):** connect the phone to the PC, then on the phone
+  turn on **Settings → Network → Hotspot & tethering → USB tethering**.
+  Open BeamX on both.
+
+If a device doesn't appear, open **Pair** on it to see its address, then on
+the other device tap **Pair → Connect by address** and type it.
+
 ## Where received files go
 
 | Device | Folder |
@@ -107,6 +134,8 @@ When BeamX asks to find devices on your local network, tap **Allow**.
 | iPhone / iPad | Files app → **On My iPhone → BeamX** |
 
 The path of each file is also shown on the **Transfers** screen.
+Screenshots (📷) and recordings (⏺) from the stream toolbar are saved in
+the same folder. Recording works on Android, iPhone/iPad and Mac.
 
 ## Verify your download
 

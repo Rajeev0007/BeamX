@@ -6,12 +6,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/settings.dart';
 import 'discovery_service.dart';
 import 'input/input_injector.dart';
 import 'prompts.dart';
+import 'save_location.dart';
 import 'settings_store.dart';
 import 'transfer_service.dart';
 import 'trust_store.dart';
@@ -361,8 +361,8 @@ class DataLink {
       return;
     }
     try {
-      final dir = await _saveDir();
-      final file = await _uniqueFile(dir, safe);
+      final dir = await SaveLocation.dir();
+      final file = await SaveLocation.uniqueFile(dir, safe);
       _sink = file.openWrite();
       _file = file;
       final item = TransferItem(
@@ -450,41 +450,6 @@ class DataLink {
     return n.isEmpty ? 'file' : n;
   }
 
-  static Future<Directory> _saveDir() async {
-    Directory dir;
-    if (Platform.isAndroid) {
-      dir = Directory('/storage/emulated/0/Download/BeamX');
-      try {
-        await dir.create(recursive: true);
-        final probe = File('${dir.path}/.beamx-write-test');
-        await probe.writeAsString('ok');
-        await probe.delete();
-        return dir;
-      } catch (_) {
-        dir = Directory(
-            '${(await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory()).path}/BeamX');
-      }
-    } else if (Platform.isIOS) {
-      // Visible in the Files app under "On My iPhone → BeamX".
-      dir = await getApplicationDocumentsDirectory();
-    } else {
-      final base = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-      dir = Directory('${base.path}${Platform.pathSeparator}BeamX');
-    }
-    await dir.create(recursive: true);
-    return dir;
-  }
-
-  static Future<File> _uniqueFile(Directory dir, String name) async {
-    final dot = name.lastIndexOf('.');
-    final stem = dot > 0 ? name.substring(0, dot) : name;
-    final ext = dot > 0 ? name.substring(dot) : '';
-    var f = File('${dir.path}${Platform.pathSeparator}$name');
-    for (var i = 1; await f.exists(); i++) {
-      f = File('${dir.path}${Platform.pathSeparator}$stem ($i)$ext');
-    }
-    return f;
-  }
 
   Future<void> close() async {
     if (_closed) return;

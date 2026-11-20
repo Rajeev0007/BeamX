@@ -7,11 +7,12 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.5 (preview).** Live screen sharing and remote control over
+> **Status: v0.6 (preview).** Live screen sharing and remote control over
 > the same Wi-Fi work between Windows, macOS, Linux and Android, and
 > iPhones can view and control. Sound is shared from Windows and Linux.
-> File transfer, shared clipboard, trusted devices and QR pairing work too.
-> USB and internet connections come next; see the [roadmap](docs/ROADMAP.md).
+> File transfer, clipboard, trusted devices, QR pairing, screenshots,
+> recording and USB/hotspot connections work too. Internet connections come
+> next; see the [roadmap](docs/ROADMAP.md).
 
 ## Download
 
@@ -20,9 +21,9 @@ Step-by-step instructions for each platform are in the [install guide](docs/INST
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | `BeamX-windows-x64.zip` |
+| Windows 10/11 (64-bit) | `BeamX-windows-setup.exe` (installer) or `BeamX-windows-x64.zip` (portable) |
 | macOS | `BeamX-macos.dmg` |
-| Linux (x64) | `BeamX-linux-x64.tar.gz` |
+| Linux (x64) | `BeamX-linux-amd64.deb` (Ubuntu/Debian) or `BeamX-linux-x64.tar.gz` |
 | Android | `BeamX-android-arm64.apk` (most phones), `BeamX-android-armv7.apk` (older phones) or `BeamX-android.apk` (works on all, larger) |
 | iPhone / iPad | `BeamX-ios-unsigned.ipa` (install with AltStore or SideStore) |
 
@@ -64,6 +65,8 @@ time it connects without a code.
 - Choose resolution (up to 4K), frame rate (up to 120 FPS), bitrate and
   codec (H.264, H.265, AV1); quality also adapts to the network
 - Sound from shared Windows and Linux screens, with a mute button
+- Screenshots and recording of the stream
+- Works over Wi-Fi, a phone hotspot or a USB cable (Android tethering)
 - Live stats: resolution, FPS, bitrate, codec and ping
 - Nearby devices appear automatically on the same Wi-Fi
 - Pair with a one-time 6-digit code, QR code or IP address, and approve

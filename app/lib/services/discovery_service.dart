@@ -77,14 +77,36 @@ class DiscoveryService {
         'platform': platform,
         'port': s.port,
       }));
-      try {
-        _socket?.send(
-            packet, InternetAddress('255.255.255.255'), discoveryPort);
-      } on SocketException catch (e) {
-        error.value = 'Broadcast failed: ${e.message}';
+      // 255.255.255.255 only leaves through the default network, so also
+      // send to each network's own broadcast address. This makes discovery
+      // work over a phone hotspot or USB tethering next to Wi-Fi.
+      for (final target in {'255.255.255.255', ..._subnetBroadcasts}) {
+        try {
+          _socket?.send(packet, InternetAddress(target), discoveryPort);
+        } on SocketException catch (_) {
+          // Some networks refuse broadcasts; the others still work.
+        }
       }
     }
+    if (++_ticks % 5 == 1) _refreshInterfaces();
     _prune();
+  }
+
+  int _ticks = 0;
+  Set<String> _subnetBroadcasts = {};
+
+  /// Assumes /24 networks, which home Wi-Fi, hotspots and tethering use.
+  Future<void> _refreshInterfaces() async {
+    try {
+      final ifaces =
+          await NetworkInterface.list(type: InternetAddressType.IPv4);
+      _subnetBroadcasts = {
+        for (final i in ifaces)
+          for (final a in i.addresses)
+            if (!a.isLoopback && !a.isLinkLocal)
+              '${a.address.substring(0, a.address.lastIndexOf('.'))}.255',
+      };
+    } catch (_) {}
   }
 
   void _handle(Datagram dg) {

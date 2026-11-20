@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../models/settings.dart';
 import 'data_link.dart';
 import 'pairing_service.dart';
+import 'save_location.dart';
 import 'screen_capture.dart';
 import 'signaling.dart';
 
@@ -152,6 +154,60 @@ class BeamSession extends ChangeNotifier {
   final List<MediaStreamTrack> _remoteAudio = [];
   bool _muted = false;
 
+  // Screenshots and recording (viewer)
+  MediaStreamTrack? _remoteVideo;
+  MediaRecorder? _recorder;
+  String? _recordingPath;
+
+  /// Video recording works on Android, iPhone/iPad and Mac.
+  static bool get recordingSupported =>
+      Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+
+  bool get canCapture => !isSharer && _remoteVideo != null;
+  bool get recording => _recorder != null;
+
+  /// Viewer: saves the current picture as a PNG. Returns the file path.
+  Future<String> screenshot() async {
+    final track = _remoteVideo;
+    if (track == null) throw StateError('No video yet');
+    final bytes = await track.captureFrame();
+    final file = await SaveLocation.uniqueFile(
+        await SaveLocation.dir(), SaveLocation.timestamped(peerName, 'png'));
+    await file.writeAsBytes(bytes.asUint8List(), flush: true);
+    return file.path;
+  }
+
+  /// Viewer: starts recording the stream (with sound on Android) to MP4.
+  Future<void> startRecording() async {
+    final track = _remoteVideo;
+    if (track == null || _recorder != null) return;
+    final file = await SaveLocation.uniqueFile(
+        await SaveLocation.dir(), SaveLocation.timestamped(peerName, 'mp4'));
+    final r = MediaRecorder();
+    await r.start(
+      file.path,
+      videoTrack: track,
+      audioChannel: Platform.isAndroid && receivingAudio
+          ? RecorderAudioChannel.OUTPUT
+          : null,
+    );
+    _recorder = r;
+    _recordingPath = file.path;
+    notifyListeners();
+  }
+
+  /// Viewer: stops recording. Returns the saved file path.
+  Future<String?> stopRecording() async {
+    final r = _recorder;
+    if (r == null) return null;
+    _recorder = null;
+    notifyListeners();
+    try {
+      await r.stop();
+    } catch (_) {}
+    return _recordingPath;
+  }
+
   /// Sharer: whether this device's sound is being sent.
   bool sendingAudio = false;
 
@@ -211,6 +267,7 @@ class BeamSession extends ChangeNotifier {
           e.track.enabled = !_muted;
           notifyListeners();
         }
+        if (e.track.kind == 'video') _remoteVideo = e.track;
         if (e.track.kind == 'video' && e.streams.isNotEmpty) {
           renderer.srcObject = e.streams.first;
           notifyListeners();
@@ -454,6 +511,7 @@ class BeamSession extends ChangeNotifier {
     _channel.send({'t': 'bye'});
     _channel.close(reason);
     await _messages?.cancel();
+    await stopRecording();
     await link.close();
     try {
       for (final t in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {

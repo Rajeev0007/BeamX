@@ -34,20 +34,25 @@
 - [ ] Gamepad mode and custom gesture shortcuts
 - [ ] Control of a second monitor (main screen only for now)
 
-## v0.5: Sound (current)
+## v0.5: Sound ✅
 - [x] Stream the system sound of Windows (WASAPI loopback) and Linux (PulseAudio / PipeWire)
 - [x] Mute button on the viewing device
 - [x] Turn sound off in Settings → Audio
 - [ ] System sound from Android and macOS (needs native audio capture)
 - [ ] Microphone sharing
 
-## v0.6: Connect anywhere
-- [ ] USB connection (Android ADB/tethering)
-- [ ] Hotspot / Wi-Fi Direct
+## v0.6: Extras (current)
+- [x] Screenshots of the stream on every platform
+- [x] Recording the stream to MP4 on Android, iPhone/iPad and Mac
+- [x] Windows installer with Start menu entry and firewall rule
+- [x] Linux .deb package
+- [x] Phone hotspot and USB tethering connections, with discovery on every network
+
+## v0.7: Connect anywhere
 - [ ] Internet connections via signaling and TURN relay server
 - [ ] Stronger pairing (PAKE) for untrusted networks
 
-## v0.7: Extras
-- [ ] Screen recording and screenshots
+## Later
+- [ ] Recording on Windows and Linux
 - [ ] Phone as webcam, microphone or second monitor
-- [ ] Windows installer, Linux AppImage, Flathub
+- [ ] Linux AppImage and Flathub
