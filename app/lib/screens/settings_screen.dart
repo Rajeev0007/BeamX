@@ -169,18 +169,11 @@ final _entries = <_Entry>[
       secondary: const Icon(Icons.public_rounded),
       title: const Text('Connect from anywhere'),
       subtitle: Text(s.signalingServer.isEmpty
-          ? 'Needs an internet server. Set it in Connection → Internet server.'
-          : 'Stay reachable by ID over the internet while BeamX is open'),
+          ? 'Reachable by ID over the internet while BeamX is open. Uses the '
+              'free public server (no setup).'
+          : 'Reachable by ID over the internet through your own server'),
       value: s.internetEnabled,
-      onChanged: (v) {
-        if (v && s.signalingServer.isEmpty) {
-          ScaffoldMessenger.of(c).showSnackBar(const SnackBar(
-              content: Text('First set Connection → Internet server '
-                  '(see server/README.md)')));
-          return;
-        }
-        st.update((x) => x.copyWith(internetEnabled: v));
-      },
+      onChanged: (v) => st.update((x) => x.copyWith(internetEnabled: v)),
     );
   }),
   _Entry('Access from anywhere', 'Password access', 'password unattended id', (c, st, s) {
@@ -229,7 +222,7 @@ final _entries = <_Entry>[
   }),
   _Entry('Connection', 'Internet server', 'signaling relay remote anywhere', (c, st, s) {
     return _TextRow(
-      title: 'Internet server (optional)',
+      title: 'Your own internet server (optional, more reliable)',
       icon: Icons.public_rounded,
       initial: s.signalingServer,
       hint: 'wss://1-2-3-4.sslip.io/beamx',

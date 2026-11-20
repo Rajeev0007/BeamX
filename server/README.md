@@ -1,6 +1,17 @@
-# BeamX internet server
+# BeamX internet server (optional)
 
-Lets BeamX devices connect from anywhere, not just on the same Wi-Fi.
+**You don't need this to connect from anywhere.** BeamX's "Connect from
+anywhere" switch works with no setup, using the free public PeerJS server.
+
+Run your own server if you want:
+- **Reliability:** the public server is a free community service with no
+  guarantee.
+- **Mobile data that works everywhere:** your server includes a TURN relay;
+  without one, some mobile networks can't connect.
+- **Privacy:** nobody else's server sees which IDs are online.
+
+To use your server, enter its address in **Settings → Connection → Your own
+internet server**. BeamX then uses it instead of the public one.
 
 **What it does:** devices stay connected to it so others can ring them by
 their 9-digit **Internet ID**. It passes the short setup messages between two

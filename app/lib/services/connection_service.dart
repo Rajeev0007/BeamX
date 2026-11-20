@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/peer_device.dart';
@@ -8,6 +10,7 @@ import 'beam_session.dart';
 import 'data_link.dart';
 import 'discovery_service.dart';
 import 'pairing_service.dart';
+import 'peerjs_relay.dart';
 import 'password_auth.dart';
 import 'relay_client.dart';
 import 'screen_capture.dart';
@@ -77,16 +80,23 @@ class ConnectionService {
     _settings.addListener(_onSettings);
   }
 
-  RelayClient? _relay;
+  InternetRelay? _relay;
   late String _relayUrl;
   final _lockout = PasswordLockout();
 
-  /// The server to stay connected to, or '' when "connect from anywhere"
-  /// is off.
+  static const _publicServer = 'public';
+
+  /// Your own server's address, [_publicServer] for the free public one,
+  /// or '' when "connect from anywhere" is off.
   String _relayTarget() {
     final s = _settings.value;
-    return s.internetEnabled ? s.signalingServer.trim() : '';
+    if (!s.internetEnabled) return '';
+    final own = s.signalingServer.trim();
+    return own.isEmpty ? _publicServer : own;
   }
+
+  /// True when using the free public server rather than your own.
+  bool get usingPublicServer => _relayUrl == _publicServer;
 
   /// This device's 9-digit ID, shown to people who want to connect.
   String get myId => RelayClient.internetIdFor(_trust.deviceId);
@@ -102,12 +112,23 @@ class ConnectionService {
     relayStatus.value = const RelayStatus(RelayState.off);
     final url = _relayUrl.trim();
     if (url.isEmpty || kIsWeb) return;
-    final r = RelayClient(
-      url: url,
-      deviceId: _trust.deviceId,
-      key: _trust.relayKey,
-      onIncoming: _onRelayIncoming,
-    );
+    final InternetRelay r = url == _publicServer
+        ? PeerJsRelay(
+            internetId: myId,
+            // A separate secret from the own-server key, so neither server
+            // learns the other's.
+            token: sha256
+                .convert(utf8.encode('peerjs|${_trust.relayKey}'))
+                .toString()
+                .substring(0, 24),
+            onIncoming: _onRelayIncoming,
+          )
+        : RelayClient(
+            url: url,
+            deviceId: _trust.deviceId,
+            key: _trust.relayKey,
+            onIncoming: _onRelayIncoming,
+          );
     r.status.addListener(_onRelayStatus);
     _relay = r;
     r.start();
@@ -115,7 +136,7 @@ class ConnectionService {
 
   void _onRelayStatus() => relayStatus.value = _relay!.status.value;
 
-  Future<void> _onRelayIncoming(RelayTransport t, String from) async {
+  Future<void> _onRelayIncoming(SignalingTransport t, String from) async {
     final ch = SignalingChannel(t);
     await _hostChannel(ch, 'Internet · ID ${RelayClient.format(from)}',
         iceServers: _relay?.iceServers ?? const []);
@@ -443,6 +464,15 @@ class ConnectionService {
     if (nonce is! String || nonce.length > 100 ||
         hostId is! String || hostId.length > 64) {
       throw SignalingException('Not a BeamX device, or an older BeamX version');
+    }
+    // Over the internet, make sure the answering device really owns the ID
+    // we dialed before sending any proof. An impostor holding the ID on the
+    // server doesn't know the device ID it's derived from.
+    final dialed = peer.internetId;
+    if (dialed != null && RelayClient.internetIdFor(hostId) != dialed) {
+      throw SignalingException(
+          'Security check failed: the device answering isn\'t the real '
+          '${RelayClient.format(dialed)}. Nothing was sent.');
     }
     final trustKey = code == null && password == null ? _trust.keyFor(hostId) : null;
     final passwordKey =

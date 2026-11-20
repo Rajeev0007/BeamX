@@ -55,12 +55,17 @@
 - [x] Server tests in CI
 - [ ] Stronger pairing (PAKE) against active attackers
 
-## v0.8: ID + password access (current)
+## v0.8: ID + password access ✅
 - [x] Permanent 9-digit ID on the main screen, with a Connect to ID box
 - [x] Owner-set access password (PBKDF2, never stored or sent), lock after 5 wrong tries
 - [x] Password connections start without the Allow prompt (optional)
 - [x] Hidden devices: not listed anywhere, but reachable by exact ID
 - [x] "Connect from anywhere" switch
+
+## v0.9: Zero-setup internet (current)
+- [x] "Connect from anywhere" works with no setup, through the free public PeerJS server
+- [x] Your own server stays available for reliability and mobile networks (TURN)
+- [x] Internet connections check that the answering device really owns the dialed ID
 
 ## Later
 - [ ] Recording on Windows and Linux

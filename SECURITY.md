@@ -51,8 +51,13 @@ Only the latest release receives security fixes.
   size-limited, strictly validated and sanitised before display.
 - **Local first:** without an internet server set, BeamX connects only
   within your local network and contacts no outside servers.
-- **Internet mode (optional):** you choose the server (self-hosted, see
-  `server/README.md`). It relays setup messages and, when needed, encrypted
+- **Internet mode (optional, off by default):** by default it uses the free
+  public PeerJS server (0.peerjs.com) only to pass setup messages between
+  IDs; public STUN servers (Google, Cloudflare) help find a direct route.
+  For more privacy and reliability, use your own server (self-hosted, see
+  `server/README.md`). Over the internet, the connecting device checks that
+  the answering device really owns the dialed ID before sending any proof.
+  Either server It relays setup messages and, when needed, encrypted
   media through TURN. It can't read the stream, and it can't alter the
   setup messages because they're authenticated with the pairing code or
   trust key. Each device claims its ID on the server with a secret key.
