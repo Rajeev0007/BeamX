@@ -5,11 +5,18 @@ Runs `flutter create` (which only adds missing files and never touches
 lib/), then patches app names, permissions and entitlements. Safe to run
 repeatedly. Usage: python3 tool/prepare_platforms.py [platform ...]
 """
+import os
 import pathlib
 import re
 import shutil
 import subprocess
 import sys
+
+# BEAMX_CONTROL=1 builds the "Control" edition, which declares the
+# accessibility service needed to be remote-controlled. Play Protect's
+# enhanced fraud protection (India and other countries) blocks sideloaded
+# apps that declare one, so the main edition leaves it out.
+CONTROL_EDITION = os.environ.get("BEAMX_CONTROL") == "1"
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ALL = ["android", "ios", "macos", "windows", "linux"]
@@ -47,7 +54,9 @@ def android(s: str) -> str:
                 "<application", f'<uses-permission android:name="{p}"/>\n    <application', 1
             )
     a11y = ".BeamXAccessibilityService"
-    if a11y not in s:
+    if not CONTROL_EDITION:
+        s = re.sub(r'\s*<service android:name="\.BeamXAccessibilityService".*?</service>', "", s, flags=re.S)
+    if CONTROL_EDITION and a11y not in s:
         s = s.replace(
             "</application>",
             f'    <service android:name="{a11y}"\n'
@@ -154,6 +163,20 @@ def win_name(s: str) -> str:
     return s.replace('L"beamx"', 'L"BeamX"')
 
 
+def win_rc(s: str) -> str:
+    """Publisher and copyright in the .exe's file properties."""
+    s = re.sub(r'VALUE "CompanyName", "[^"]*"', 'VALUE "CompanyName", "Rajeev Development"', s)
+    s = re.sub(r'VALUE "LegalCopyright", "[^"]*"',
+               'VALUE "LegalCopyright", "Copyright (C) 2026 Rajeev Development"', s)
+    s = re.sub(r'VALUE "ProductName", "[^"]*"', 'VALUE "ProductName", "BeamX"', s)
+    s = re.sub(r'VALUE "FileDescription", "[^"]*"', 'VALUE "FileDescription", "BeamX"', s)
+    return s
+
+
+def mac_copyright(s: str) -> str:
+    return re.sub(r"PRODUCT_COPYRIGHT = .*", "PRODUCT_COPYRIGHT = Copyright © 2026 Rajeev Development", s)
+
+
 def linux_name(s: str) -> str:
     return s.replace('"beamx"', '"BeamX"')
 
@@ -174,6 +197,8 @@ def main() -> None:
     patch(ROOT / "macos/Runner/Configs/AppInfo.xcconfig", mac_name)
     patch(ROOT / "macos/Runner/Info.plist", add_plist_keys)
     patch(ROOT / "windows/runner/main.cpp", win_name)
+    patch(ROOT / "windows/runner/Runner.rc", win_rc)
+    patch(ROOT / "macos/Runner/Configs/AppInfo.xcconfig", mac_copyright)
     patch(ROOT / "linux/runner/my_application.cc", linux_name)
     # flutter create adds a sample widget test we don't use.
     sample = ROOT / "test/widget_test.dart"

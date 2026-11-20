@@ -76,7 +76,7 @@
       (Android doesn't allow apps to do this), connection type (BeamX always
       picks the best connection automatically)
 
-## v0.10: Feature batch (current)
+## v0.10: Feature batch ✅
 - [x] Media remote: play/pause, next, previous, volume, slides
       (Windows, Linux, Android; volume and Music/Spotify on Mac)
 - [x] Touch gestures when controlling a computer from a phone: tap, hold-drag,
@@ -86,6 +86,15 @@
 - [x] Save your own profiles
 - [x] Drag and drop files to send (computers), choose the save folder
 - [x] Screen rotation lock (phones)
+
+## v1.0: First stable release (current)
+- [x] Sharp quality: fixed phone resolution scaling, higher bitrate limits,
+      fast start, smooth-frame-rate mode for 60+ FPS
+- [x] Faster response: live touch on Android, separate input channel
+- [x] Nearby devices appear reliably on Android (multicast lock)
+- [x] Two Android editions: BeamX installs everywhere; BeamX Control can be
+      controlled remotely
+- [x] © Rajeev Development; About screen, NOTICE, publisher info in installers
 
 ## Later
 - [ ] Phone notifications, messages and battery on the PC

@@ -8,7 +8,10 @@ Do not open a public issue. You will get a reply within 7 days.
 
 ## Supported versions
 
-Only the latest release receives security fixes.
+Only the latest stable release receives security fixes.
+
+BeamX is developed by **Rajeev Development**. Official builds come only from
+https://github.com/Rajeev0007/BeamX/releases.
 
 ## Security design
 

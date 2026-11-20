@@ -15,7 +15,7 @@ cat > "$pkg/DEBIAN/control" <<CONTROL
 Package: beamx
 Version: $version
 Architecture: amd64
-Maintainer: Rajeev0007 <Rajeev0007@users.noreply.github.com>
+Maintainer: Rajeev Development <Rajeev0007@users.noreply.github.com>
 Homepage: https://github.com/Rajeev0007/BeamX
 Depends: libgtk-3-0 | libgtk-3-0t64, libpulse0, libxtst6
 Section: net

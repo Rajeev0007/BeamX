@@ -152,7 +152,9 @@ class BeamSession extends ChangeNotifier {
   bool _remoteSet = false;
   Timer? _statsTimer;
   StreamSubscription<Map<String, dynamic>>? _messages;
-  int? _sourceHeight;
+  /// The captured screen's short side in pixels (e.g. 1080 for a
+  /// 2400×1080 phone or a 1920×1080 PC), learned from the local preview.
+  int? _sourceShortSide;
   double _scale = 1;
   int? _lastBytes;
   double? _lastTimestamp;
@@ -163,7 +165,12 @@ class BeamSession extends ChangeNotifier {
   /// restore it.
   bool reconnecting = false;
   Timer? _graceTimer;
+  Timer? _connectTimer;
+  Timer? _restartTimer;
   bool _everConnected = false;
+
+  /// Signaling messages are handled one at a time, in order.
+  Future<void> _messageChain = Future.value();
 
   /// How long to keep trying after the connection drops.
   static const _grace = Duration(seconds: 30);
@@ -334,6 +341,7 @@ class BeamSession extends ChangeNotifier {
       pc.onIceConnectionState = (s) => DiagLog.add('ice state: ${s.name}');
       pc.onDataChannel = (dc) {
         if (dc.label == 'beamx') link.attach(dc);
+        if (dc.label == 'beamx-input') link.attachInput(dc);
       };
       pc.onTrack = (e) {
         if (e.track.kind == 'audio') {
@@ -350,11 +358,18 @@ class BeamSession extends ChangeNotifier {
 
       // Messages from the other device can also arrive over the data
       // channel, which keeps working if the setup connection drops.
-      link.onSessionMessage = _onMessage;
-      _messages = _channel.rest().listen(_onMessage, onDone: _signalingLost);
+      link.onSessionMessage = _enqueueMessage;
+      _messages = _channel.rest().listen(_enqueueMessage, onDone: _signalingLost);
       unawaited(_channel.closed.then((_) => _signalingLost()));
 
       if (isSharer) await _startSharing(pc);
+      // If the video never connects (blocked network, crashed peer), don't
+      // leave both devices waiting forever.
+      _connectTimer = Timer(const Duration(seconds: 40), () {
+        if (!_everConnected) {
+          close('Could not connect. The devices may be on networks that block direct connections.');
+        }
+      });
       _statsTimer =
           Timer.periodic(const Duration(seconds: 1), (_) => _pollStats());
     } catch (e) {
@@ -377,6 +392,8 @@ class BeamSession extends ChangeNotifier {
     await _preferCodec(pc, _quality.codec);
     link.attach(await pc.createDataChannel(
         'beamx', RTCDataChannelInit()..ordered = true));
+    link.attachInput(await pc.createDataChannel(
+        'beamx-input', RTCDataChannelInit()..ordered = true));
     // A receive-only audio slot, so the viewer can send its microphone.
     await pc.addTransceiver(
       kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
@@ -401,10 +418,18 @@ class BeamSession extends ChangeNotifier {
     if (!_everConnected) close('The other device disconnected');
   }
 
+  Future<void> _enqueueMessage(Map<String, dynamic> m) {
+    _messageChain = _messageChain.then((_) => _onMessage(m)).catchError((Object _) {});
+    return _messageChain;
+  }
+
   void _recovered() {
     _everConnected = true;
+    _connectTimer?.cancel();
     _graceTimer?.cancel();
     _graceTimer = null;
+    _restartTimer?.cancel();
+    _restartTimer = null;
     if (reconnecting) DiagLog.add('reconnected');
     reconnecting = false;
     if (phase == SessionPhase.live) {
@@ -428,7 +453,14 @@ class BeamSession extends ChangeNotifier {
       notifyListeners();
     }
     _graceTimer ??= Timer(_grace, () => close('Connection lost'));
-    if (restart && isSharer) unawaited(_restartIce());
+    // Don't leave a finger or button pressed for the whole reconnect time.
+    if (isSharer) unawaited(link.releaseInput());
+    if (restart && isSharer && _restartTimer == null) {
+      unawaited(_restartIce());
+      // The first restart can be lost with the network; keep trying.
+      _restartTimer = Timer.periodic(
+          const Duration(seconds: 5), (_) => unawaited(_restartIce()));
+    }
   }
 
   Future<void> _restartIce() async {
@@ -469,8 +501,14 @@ class BeamSession extends ChangeNotifier {
             'mac': PairingService.mac(_code, answer.sdp ?? ''),
           });
         case 'answer' when isSharer:
-          final sdp = _verifiedSdp(m);
-          await pc.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
+          final original = _verifiedSdp(m);
+          try {
+            await pc.setRemoteDescription(
+                RTCSessionDescription(_boostStartBitrate(original), 'answer'));
+          } catch (e) {
+            DiagLog.add('start-bitrate hint rejected, using plain answer ($e)');
+            await pc.setRemoteDescription(RTCSessionDescription(original, 'answer'));
+          }
           await _flushIce(pc);
         case 'ice':
           final c = m['candidate'];
@@ -494,7 +532,11 @@ class BeamSession extends ChangeNotifier {
     } on SignalingException catch (e) {
       close(e.message);
     } catch (e) {
-      debugPrint('BeamX session message error: $e');
+      DiagLog.add('session message error (${m['t']}): $e');
+      // Without a working offer/answer the stream can never start.
+      if (!_everConnected && (m['t'] == 'offer' || m['t'] == 'answer')) {
+        close('Could not set up the stream: $e');
+      }
     }
   }
 
@@ -548,8 +590,11 @@ class BeamSession extends ChangeNotifier {
     final sender = _sender;
     if (sender == null) return;
     final q = _quality;
-    if (_sourceHeight != null) {
-      _scale = (_sourceHeight! / q.resolution).clamp(1.0, 8.0);
+    // "1080p" means the short side, so a portrait phone (1080×2400) stays
+    // sharp. Scaling by the height used to shrink phones to ~486 px wide.
+    final short = _sourceShortSide;
+    if (short != null && short > 0) {
+      _scale = (short / q.resolution).clamp(1.0, 8.0);
     }
     try {
       final params = sender.parameters;
@@ -559,12 +604,83 @@ class BeamSession extends ChangeNotifier {
       }
       final e = params.encodings!.first;
       e.maxFramerate = q.fps;
-      e.maxBitrate = q.autoBitrate ? null : (q.mbps * 1000000).round();
+      // Without a limit, WebRTC caps screen sharing at ~2.5 Mbps, which made
+      // the picture blurry and the frame rate drop. Auto now allows enough
+      // for sharp text, and congestion control still lowers it on weak
+      // networks.
+      e.maxBitrate = (q.autoBitrate ? autoMaxBitrate(q) : q.mbps * 1000000).round();
       e.scaleResolutionDownBy = _scale;
+      // Screens default to "keep resolution, drop frames", which felt laggy.
+      // Smooth profiles keep the frame rate; others balance both.
+      params.degradationPreference = q.fps >= 60
+          ? RTCDegradationPreference.MAINTAIN_FRAMERATE
+          : RTCDegradationPreference.BALANCED;
       await sender.setParameters(params);
+      DiagLog.add('encoding: short side ${short ?? '?'} → ${q.resolution}p '
+          '(scale ${_scale.toStringAsFixed(2)}), ${q.fps} FPS, '
+          'max ${(e.maxBitrate! / 1e6).toStringAsFixed(1)} Mbps');
     } catch (err) {
       debugPrint('BeamX: could not apply encoding ($err)');
     }
+  }
+
+  /// Bitrate ceiling for automatic mode: about 0.1 bits per pixel per frame,
+  /// e.g. 1080p30 ≈ 8 Mbps, 1080p60 ≈ 14 Mbps, 4K30 ≈ 30 Mbps.
+  static double autoMaxBitrate(StreamQuality q) {
+    final h = q.resolution.toDouble();
+    final pixels = h * h * 16 / 9;
+    final fpsFactor = q.fps <= 30 ? q.fps : 30 + (q.fps - 30) * 0.6;
+    return (pixels * fpsFactor * 0.13).clamp(2e6, 60e6);
+  }
+
+  /// Starts the encoder near its target instead of WebRTC's slow ~300 kbps
+  /// ramp-up, which made the first seconds blurry. Applied to the remote
+  /// answer locally, after its authenticity check.
+  String _boostStartBitrate(String sdp) {
+    // Only the start bitrate is set here; the ceiling stays adjustable at
+    // any time through encodings[0].maxBitrate. A low floor lets congestion
+    // control back off on weak Wi-Fi instead of building up delay.
+    final q = _quality;
+    final maxKbps = ((q.autoBitrate ? autoMaxBitrate(q) : q.mbps * 1e6) / 1000).round();
+    final target = iceServers.isEmpty ? (maxKbps * 0.6).round() : 2500;
+    final startKbps = target < maxKbps ? target : maxKbps;
+    const minKbps = 300;
+    final lines = sdp.split('\r\n');
+    final video = <String>{};
+    var inVideo = false;
+    for (final l in lines) {
+      if (l.startsWith('m=')) inVideo = l.startsWith('m=video');
+      final m = RegExp(r'^a=rtpmap:(\d+) (H264|VP8|VP9|AV1|H265)/').firstMatch(l);
+      if (inVideo && m != null) video.add(m.group(1)!);
+    }
+    final extra = 'x-google-start-bitrate=$startKbps;x-google-min-bitrate=$minKbps';
+    final out = <String>[];
+    final hasFmtp = <String>{};
+    var section = '';
+    for (final l in lines) {
+      if (l.startsWith('m=')) section = l;
+      final m = RegExp(r'^a=fmtp:(\d+) ').firstMatch(l);
+      if (m != null && section.startsWith('m=video') &&
+          video.contains(m.group(1)) && !l.contains('x-google-start-bitrate')) {
+        hasFmtp.add(m.group(1)!);
+        out.add('$l;$extra');
+      } else {
+        out.add(l);
+      }
+    }
+    // Codecs without an fmtp line (e.g. VP8) get one after their rtpmap.
+    final result = <String>[];
+    section = '';
+    for (final l in out) {
+      result.add(l);
+      if (l.startsWith('m=')) section = l;
+      final m = RegExp(r'^a=rtpmap:(\d+) ').firstMatch(l);
+      if (m != null && section.startsWith('m=video') &&
+          video.contains(m.group(1)) && !hasFmtp.contains(m.group(1))) {
+        result.add('a=fmtp:${m.group(1)} $extra');
+      }
+    }
+    return result.join('\r\n');
   }
 
   /// Viewer side: ask the sharing device for a new quality.
@@ -626,9 +742,15 @@ class BeamSession extends ChangeNotifier {
       _lastTimestamp = ts;
 
       // Learn the real screen height once, then scale to the target.
-      if (isSharer && _sourceHeight == null && h != null && h > 0) {
-        _sourceHeight = (h * _scale).round();
-        await _applyEncoding();
+      // Learn the real screen size once from the local preview (the
+      // captured frames), then scale to the target.
+      if (isSharer && _sourceShortSide == null) {
+        final vw = renderer.videoWidth, vh = renderer.videoHeight;
+        if (vw > 0 && vh > 0) {
+          _sourceShortSide = vw < vh ? vw : vh;
+          DiagLog.add('capturing ${vw}x$vh');
+          await _applyEncoding();
+        }
       }
 
       stats.value = StreamStats(
@@ -658,14 +780,27 @@ class BeamSession extends ChangeNotifier {
     phase = SessionPhase.ended;
     endReason = reason;
     DiagLog.add('session ended: $reason');
+    try {
+      await _closeResources(reason);
+    } finally {
+      if (!_ended.isCompleted) _ended.complete(reason);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _closeResources(String reason) async {
     _statsTimer?.cancel();
     _graceTimer?.cancel();
+    _connectTimer?.cancel();
+    _restartTimer?.cancel();
     if (link.ready.value) link.sendSessionMessage({'t': 'bye'});
     _channel.send({'t': 'bye'});
     _channel.close(reason);
-    await _messages?.cancel();
-    await stopRecording();
-    await link.close();
+    try {
+      await _messages?.cancel();
+      await stopRecording();
+      await link.close();
+    } catch (_) {}
     try {
       for (final t in [
         ...?_localStream?.getTracks(),
@@ -680,8 +815,8 @@ class BeamSession extends ChangeNotifier {
       await _pc?.dispose();
       await renderer.dispose();
     } catch (_) {}
-    if (isSharer) await ScreenCapture.stopService();
-    if (!_ended.isCompleted) _ended.complete(reason);
-    notifyListeners();
+    try {
+      if (isSharer) await ScreenCapture.stopService();
+    } catch (_) {}
   }
 }

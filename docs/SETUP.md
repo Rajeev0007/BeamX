@@ -14,7 +14,8 @@ site** in your browser menu if you can't find **Settings**.
 - [x] Automatic builds for Android, Windows, macOS, Linux and iOS
 - [x] Release pipeline with checksums and signed build attestations
 - [x] Dependabot version updates and weekly OpenSSF security scorecard
-- [x] First public preview release: **v0.1.0-preview**
+- [x] Public releases up to **v1.0.0**
+- [x] Two Android editions, so the main one isn't blocked by Play Protect
 
 ## Checklist
 
@@ -25,7 +26,8 @@ site** in your browser menu if you can't find **Settings**.
 | 3 | [Publish a release](#3-publish-a-release) | 2 min | Each new version |
 | 4 | [Free Windows signing](#4-free-windows-signing-signpath) | 15 min + waiting | Removing the SmartScreen warning |
 | 5 | [Android developer verification](#5-android-developer-verification) | 15 min | Installs in 2027 and later |
-| 6 | [Internet server](../server/README.md) (optional) | 30 min | Connecting from anywhere |
+| 6 | [Internet server](../server/README.md) (optional) | 30 min | Most reliable "connect from anywhere" |
+| 7 | [Play Protect review](#7-play-protect-review) (optional) | 20 min | Fewer warnings for BeamX Control |
 
 ---
 
@@ -174,6 +176,25 @@ Before 2027:
 
 ---
 
+## 7. Play Protect review
+
+Play Protect can block or warn about apps installed from outside the Play
+Store, especially **BeamX Control**, which has an accessibility service.
+The main **BeamX** edition leaves that service out so it installs normally.
+
+To reduce warnings over time:
+1. Complete [Android developer verification](#5-android-developer-verification)
+   and register `io.github.rajeev0007.beamx` with your signing key. Apps from
+   verified developers are treated as lower risk.
+2. If Play Protect flags BeamX, Google lets developers appeal a Play Protect
+   classification they believe is wrong. Google's
+   [developer guidance for Play Protect warnings](https://developers.google.com/android/play-protect/warning-dev-guidance)
+   explains the process. Include a link to this repository and explain that
+   the accessibility service is only used for remote control the phone's
+   owner turns on.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -181,5 +202,6 @@ Before 2027:
 | A build shows a red ✗ | Open **Actions**, tap the failed run, then the red job, to see the error. Re-run with **Re-run failed jobs** if it looks like a temporary GitHub problem. |
 | `hdiutil: create failed - Resource busy` | Temporary macOS runner problem. The workflow retries 5 times; if it still fails, re-run the job. |
 | "Stable releases need the ANDROID_KEYSTORE_* secrets" | Finish step 2, delete the failed release and its tag, and publish again. Or use a `-preview` tag. |
+| Play Protect says "Unsafe app blocked" | Install the main **BeamX** edition, which has no accessibility service. See [INSTALL.md](INSTALL.md#two-android-editions). |
 | Android says "App not installed" when updating | The new APK has a different key than the installed one. Uninstall BeamX, then install the new APK. This happens once, when moving from preview builds to the permanent key. |
 | Dependabot PR fails its checks | Comment `@dependabot rebase` on the PR. If it still fails, ask your developer to look. |

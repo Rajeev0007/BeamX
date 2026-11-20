@@ -2,21 +2,24 @@ import 'package:flutter/services.dart';
 
 import 'input_injector.dart';
 
-/// Touch and text control of an Android phone through BeamX's accessibility
-/// service (native code in app/native/android).
+/// Touch, text and media control of an Android phone through BeamX's
+/// accessibility service (native code in app/native/android).
 ///
-/// A pointer down → moves → up sequence becomes one gesture, so taps,
-/// long presses and swipes all work. The gesture plays when the finger or
-/// mouse button is released.
+/// On Android 8 and newer the finger follows the remote pointer live
+/// (continued strokes), so drags and swipes respond immediately.
 class AndroidInput implements InputInjector {
   static const _ch = MethodChannel('beamx/input');
 
-  final List<double> _points = [];
-  DateTime? _downAt;
+  bool _down = false;
+  DateTime _lastMove = DateTime(2000);
+  bool? _controlEdition;
 
   @override
   Future<bool> isReady() async {
     try {
+      _controlEdition ??=
+          await _ch.invokeMethod<bool>('isControlEdition') ?? false;
+      if (_controlEdition == false) return false;
       return await _ch.invokeMethod<bool>('isEnabled') ?? false;
     } catch (_) {
       return false;
@@ -24,42 +27,45 @@ class AndroidInput implements InputInjector {
   }
 
   @override
-  String get permissionHelp =>
-      'Turn on BeamX in Settings → Accessibility → Installed apps (or '
-      'Downloaded apps). If Android says it\'s a restricted setting, open '
-      'Settings → Apps → BeamX → ⋮ → Allow restricted settings first.';
+  String get permissionHelp => _controlEdition == false
+      ? 'This BeamX edition can\'t be controlled remotely (it installs '
+          'without Play Protect blocks). For remote control of this phone, '
+          'install "BeamX Control" from the Releases page.'
+      : 'Turn on BeamX in Settings → Accessibility → Installed apps (or '
+          'Downloaded apps). If Android says it\'s a restricted setting, open '
+          'Settings → Apps → BeamX → ⋮ → Allow restricted settings first.';
 
   @override
   Future<void> openPermissionSettings() async {
+    if (_controlEdition == false) {
+      try {
+        await _ch.invokeMethod<void>('openReleases');
+      } catch (_) {}
+      return;
+    }
     try {
       await _ch.invokeMethod<void>('openSettings');
     } catch (_) {}
   }
+
+  Future<void> _touch(String method, double x, double y) =>
+      _ch.invokeMethod<bool>(method, {'x': x, 'y': y});
 
   @override
   Future<void> handle(RemoteInput input) async {
     try {
       switch (input) {
         case PointerButton(:final x, :final y, :final down) when down:
-          _points
-            ..clear()
-            ..addAll([x, y]);
-          _downAt = DateTime.now();
-        case PointerMove(:final x, :final y) when _downAt != null:
-          final n = _points.length;
-          final moved = n < 2 ||
-              (x - _points[n - 2]).abs() > 0.002 ||
-              (y - _points[n - 1]).abs() > 0.002;
-          if (moved && _points.length < 2000) _points.addAll([x, y]);
-        case PointerButton(:final x, :final y) :
-          final start = _downAt;
-          if (start == null) break;
-          _downAt = null;
-          if (_points.length >= 2) _points.addAll([x, y]);
-          final ms = DateTime.now().difference(start).inMilliseconds.clamp(1, 59000);
-          await _ch.invokeMethod<bool>(
-              'gesture', {'points': List<double>.of(_points), 'duration': ms});
-          _points.clear();
+          _down = true;
+          await _touch('touchDown', x, y);
+        case PointerMove(:final x, :final y) when _down:
+          final now = DateTime.now();
+          if (now.difference(_lastMove).inMilliseconds < 12) break;
+          _lastMove = now;
+          await _touch('touchMove', x, y);
+        case PointerButton(:final x, :final y) when _down:
+          _down = false;
+          await _touch('touchUp', x, y);
         case TypeText(:final text):
           await _ch.invokeMethod<bool>('text', {'text': text});
         case KeyPress(:final key, :final down) when down && mediaKeyNames.contains(key):
@@ -78,9 +84,13 @@ class AndroidInput implements InputInjector {
     }
   }
 
+  /// Lifts a held finger where it is (no swipe to the centre).
   @override
   Future<void> reset() async {
-    _points.clear();
-    _downAt = null;
+    if (!_down) return;
+    _down = false;
+    try {
+      await _ch.invokeMethod<bool>('touchCancel');
+    } catch (_) {}
   }
 }

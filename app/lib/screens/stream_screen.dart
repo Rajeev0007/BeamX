@@ -100,7 +100,11 @@ class _StreamScreenState extends State<StreamScreen> {
       final messenger = ScaffoldMessenger.of(context);
       final route = ModalRoute.of(context);
       if (route != null && route.isActive) {
-        Navigator.of(context).removeRoute(route);
+        final nav = Navigator.of(context);
+        // Close sheets and dialogs opened from the stream (quality, keyboard,
+        // media remote, incoming file) along with it.
+        if (!route.isCurrent) nav.popUntil((r) => r == route);
+        nav.removeRoute(route);
       }
       if (reason != null && reason != 'You ended the session') {
         messenger.showSnackBar(SnackBar(

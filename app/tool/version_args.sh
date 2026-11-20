@@ -8,11 +8,13 @@ set -euo pipefail
 
 args=()
 if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
-  name="${GITHUB_REF_NAME#v}"
-  name="${name%%-*}"
+  full="${GITHUB_REF_NAME#v}"
+  name="${full%%-*}"
   if [[ "$name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     args+=("--build-name=$name")
   fi
+  # Shown in Settings → About.
+  args+=("--dart-define=BEAMX_VERSION=$full")
 fi
 if [[ -n "${GITHUB_RUN_NUMBER:-}" ]]; then
   args+=("--build-number=$GITHUB_RUN_NUMBER")

@@ -1,7 +1,7 @@
 # Installing BeamX
 
 Download files from the [Releases page](https://github.com/Rajeev0007/BeamX/releases).
-Preview releases are marked **Pre-release**.
+Use the newest release that isn't marked **Pre-release**.
 
 BeamX is free and not sold through app stores, so some systems ask you to
 confirm the install once. This is normal for apps downloaded from the web.
@@ -9,35 +9,54 @@ You can confirm the file is genuine with [the steps at the end](#verify-your-dow
 
 ## Android
 
-1. Download the APK on your phone:
-   - `BeamX-android-arm64.apk`: most phones from 2017 onwards (smallest download)
-   - `BeamX-android-armv7.apk`: older phones
-   - `BeamX-android.apk`: works on every phone, but is larger
+### Two Android editions
 
-   Stay with the same type for updates. Switching from the arm64 or armv7
-   file back to `BeamX-android.apk` needs an uninstall first.
+| Edition | Files | Installs everywhere? | Can this phone be remote-controlled? |
+|---|---|---|---|
+| **BeamX** (recommended) | `BeamX-android-arm64.apk`, `-armv7.apk`, `BeamX-android.apk` | ✅ Yes | ❌ No. It can still share its screen, view and control other devices, and send files. |
+| **BeamX Control** | `BeamX-Control-android-arm64.apk`, `BeamX-Control-android.apk` | ⚠️ May be blocked by Play Protect in India and some other countries | ✅ Yes |
+
+**Why two?** Being controlled remotely needs an Android *accessibility
+service*. Google Play Protect's "enhanced fraud protection" (India, Brazil,
+Singapore, Thailand and more) automatically blocks installing downloaded
+apps that contain one, because scammers misuse them. The main edition leaves
+it out so it installs normally. Both editions are signed with the same key,
+so you can switch by installing the other one over it.
+
+### Install
+1. Download the APK on your phone:
+   - `BeamX-android-arm64.apk`: most phones from 2017 onwards (smallest)
+   - `BeamX-android-armv7.apk`: older phones
+   - `BeamX-android.apk`: any phone, larger download
 2. Open it. If asked, tap **Settings** and turn on **Allow from this source**
    for your browser or file manager.
-3. Tap **Install**. If Play Protect shows a warning about an unknown app,
-   tap **More details → Install anyway**.
+3. Tap **Install**. If Play Protect shows **"Unsafe app blocked"** or an
+   unknown-developer warning, tap **More details → Install anyway**.
 
-When you first share your screen, Android asks:
-- **Allow notifications**: tap **Allow**. The notification shows while sharing.
-- **Start recording or casting with BeamX?**: choose **Entire screen** and tap **Start**.
-- **Run in background** (battery optimisation): tap **Allow**, so sharing
-  doesn't stop when you switch apps.
+Stay with the same file type for updates. Moving from an arm64/armv7 file
+to `BeamX-android.apk` needs an uninstall first.
 
-To let a computer **control this phone**:
-1. Open **Settings → Accessibility → Installed apps** (or **Downloaded apps**)
+### First time you share your screen
+- **Allow notifications:** tap **Allow** (the notification shows while sharing).
+- **Start recording or casting with BeamX?** Choose **Entire screen**, tap **Start**.
+- **Run in background:** tap **Allow**, so sharing continues when you switch apps.
+
+### Letting a computer control this phone (BeamX Control only)
+1. Install **BeamX Control**. If Play Protect blocks it, see below.
+2. Open **Settings → Accessibility → Installed apps** (or **Downloaded apps**)
    and turn on **BeamX remote control**.
-2. If Android says **Restricted setting**, open **Settings → Apps → BeamX**,
-   tap **⋮ → Allow restricted settings**, then repeat step 1.
+3. If Android says **Restricted setting**, open **Settings → Apps → BeamX**,
+   tap **⋮ → Allow restricted settings**, then repeat step 2.
 
-BeamX's sharing screen shows an **Open settings** button for this. The
-service only acts while you allow remote control in a session.
+The service only acts while you allow remote control in a session, and
+reads no screen content.
 
-If your installed BeamX is named `BeamX-android-preview.apk` (v0.1.0-preview),
-uninstall it before installing a newer version. It used a temporary signing key.
+**If Play Protect blocks BeamX Control:** there is no setting in BeamX that
+can override Play Protect. Your options are:
+- Use the main **BeamX** edition (everything except being controlled), or
+- Temporarily turn off **Play Store → profile icon → Play Protect → ⚙ →
+  Scan apps with Play Protect**, install, then turn it back on. Only do this
+  for files from the official Releases page, after checking the checksum.
 
 ## Windows
 

@@ -72,9 +72,38 @@ jobs:
           channel: stable
           cache: true
       - run: python3 tool/prepare_platforms.py android
-      - run: flutter build apk --release $(bash tool/version_args.sh)
-      # Smaller APKs for one phone type each (most phones: arm64).
-      - run: flutter build apk --release --split-per-abi $(bash tool/version_args.sh)
+      # Main edition: installs on every phone, including where Play Protect's
+      # fraud protection blocks apps with an accessibility service.
+      - name: Build BeamX
+        run: |
+          OUT=build/app/outputs/flutter-apk
+          flutter build apk --release $(bash tool/version_args.sh)
+          flutter build apk --release --split-per-abi $(bash tool/version_args.sh)
+          mkdir -p ../unsigned
+          cp $OUT/app-release.apk ../unsigned/BeamX-android.apk
+          cp $OUT/app-arm64-v8a-release.apk ../unsigned/BeamX-android-arm64.apk
+          cp $OUT/app-armeabi-v7a-release.apk ../unsigned/BeamX-android-armv7.apk
+      # Control edition: adds the accessibility service so the phone itself
+      # can be remote-controlled.
+      - name: Build BeamX Control
+        env:
+          BEAMX_CONTROL: '1'
+        run: |
+          OUT=build/app/outputs/flutter-apk
+          python3 tool/prepare_platforms.py android
+          flutter build apk --release $(bash tool/version_args.sh)
+          flutter build apk --release --split-per-abi $(bash tool/version_args.sh)
+          cp $OUT/app-release.apk ../unsigned/BeamX-Control-android.apk
+          cp $OUT/app-arm64-v8a-release.apk ../unsigned/BeamX-Control-android-arm64.apk
+      - name: Check editions
+        run: |
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
+          if "$AAPT2" dump xmltree ../unsigned/BeamX-android-arm64.apk --file AndroidManifest.xml | grep -q BeamXAccessibilityService; then
+            echo "::error::Main edition contains the accessibility service"; exit 1
+          fi
+          "$AAPT2" dump xmltree ../unsigned/BeamX-Control-android-arm64.apk --file AndroidManifest.xml | grep -q BeamXAccessibilityService \
+            || { echo "::error::Control edition is missing the accessibility service"; exit 1; }
+          echo "Editions checked: main without, Control with the accessibility service"
       - name: Sign with release key
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -83,7 +112,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           mkdir -p ../dist
-          APK=build/app/outputs/flutter-apk/app-release.apk
           if [ -z "$KEYSTORE_B64" ]; then
             # Stable releases (v1.2.3) must use the permanent key. Preview
             # tags (v1.2.3-preview) may use a temporary test key.
@@ -91,24 +119,22 @@ jobs:
               echo "::error::Stable releases need the ANDROID_KEYSTORE_* secrets (see docs/SETUP.md)"
               exit 1
             fi
-            echo "::warning::No release key configured; APK uses a temporary test key"
-            cp "$APK" ../dist/BeamX-android-preview.apk
+            echo "::warning::No release key configured; APKs use a temporary test key"
+            for f in ../unsigned/*.apk; do cp "$f" "../dist/$(basename "$f" .apk)-preview.apk"; done
             exit 0
           fi
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
-          OUT=build/app/outputs/flutter-apk
-          sign() {
+          for f in ../unsigned/*.apk; do
             "$APKSIGNER" sign --ks "$RUNNER_TEMP/release.jks" \
               --ks-pass env:KEYSTORE_PASSWORD --ks-key-alias "$KEY_ALIAS" \
               --key-pass env:KEY_PASSWORD --v4-signing-enabled false \
-              --out "../dist/$2" "$1"
-            "$APKSIGNER" verify --print-certs "../dist/$2" | head -1
-          }
-          sign "$APK" BeamX-android.apk
-          sign "$OUT/app-arm64-v8a-release.apk" BeamX-android-arm64.apk
-          sign "$OUT/app-armeabi-v7a-release.apk" BeamX-android-armv7.apk
+              --out "../dist/$(basename "$f")" "$f"
+            echo "$(basename "$f"): $("$APKSIGNER" verify --print-certs "../dist/$(basename "$f")" | head -1)"
+          done
           rm -f "$RUNNER_TEMP/release.jks"
+          # The main edition must not contain the accessibility service.
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android
