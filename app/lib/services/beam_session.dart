@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../models/settings.dart';
 import 'data_link.dart';
+import 'diag_log.dart';
 import 'pairing_service.dart';
 import 'save_location.dart';
 import 'screen_capture.dart';
@@ -154,6 +155,15 @@ class BeamSession extends ChangeNotifier {
 
   SessionPhase phase = SessionPhase.connecting;
 
+  /// True while the connection is interrupted and BeamX is trying to
+  /// restore it.
+  bool reconnecting = false;
+  Timer? _graceTimer;
+  bool _everConnected = false;
+
+  /// How long to keep trying after the connection drops.
+  static const _grace = Duration(seconds: 30);
+
   // Sound
   final List<MediaStreamTrack> _remoteAudio = [];
   bool _muted = false;
@@ -257,12 +267,21 @@ class BeamSession extends ChangeNotifier {
         });
       };
       pc.onConnectionState = (s) {
-        if (s == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
-          _setPhase(SessionPhase.live);
-        } else if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-          close('Connection lost');
+        DiagLog.add('webrtc state: ${s.name}');
+        switch (s) {
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+            _recovered();
+          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+            _interrupted(restart: false);
+          case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+            _interrupted(restart: true);
+          case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
+            if (_everConnected) close('Connection closed');
+          default:
+            break;
         }
       };
+      pc.onIceConnectionState = (s) => DiagLog.add('ice state: ${s.name}');
       pc.onDataChannel = (dc) {
         if (dc.label == 'beamx') link.attach(dc);
       };
@@ -279,9 +298,11 @@ class BeamSession extends ChangeNotifier {
         }
       };
 
-      _messages = _channel.rest().listen(_onMessage,
-          onDone: () => close('The other device disconnected'));
-      unawaited(_channel.closed.then((r) => close('The other device disconnected')));
+      // Messages from the other device can also arrive over the data
+      // channel, which keeps working if the setup connection drops.
+      link.onSessionMessage = _onMessage;
+      _messages = _channel.rest().listen(_onMessage, onDone: _signalingLost);
+      unawaited(_channel.closed.then((_) => _signalingLost()));
 
       if (isSharer) await _startSharing(pc);
       _statsTimer =
@@ -317,6 +338,64 @@ class BeamSession extends ChangeNotifier {
     await _applyEncoding();
   }
 
+  /// The setup connection closed. Before the video connects that ends the
+  /// session; afterwards it's not needed, so streaming carries on.
+  void _signalingLost() {
+    if (phase == SessionPhase.ended) return;
+    DiagLog.add('setup connection closed (${_everConnected ? 'stream continues' : 'before connecting'})');
+    if (!_everConnected) close('The other device disconnected');
+  }
+
+  void _recovered() {
+    _everConnected = true;
+    _graceTimer?.cancel();
+    _graceTimer = null;
+    if (reconnecting) DiagLog.add('reconnected');
+    reconnecting = false;
+    if (phase == SessionPhase.live) {
+      notifyListeners();
+    } else {
+      _setPhase(SessionPhase.live);
+    }
+  }
+
+  /// The network dropped. Keep the session for [_grace] while WebRTC
+  /// reconnects; on failure the sharing side also restarts ICE so a new
+  /// network path (e.g. Wi-Fi → mobile data) can be found.
+  void _interrupted({required bool restart}) {
+    if (phase == SessionPhase.ended) return;
+    if (!_everConnected) {
+      if (restart) close('Could not connect. The devices may be on networks that block direct connections.');
+      return;
+    }
+    if (!reconnecting) {
+      reconnecting = true;
+      notifyListeners();
+    }
+    _graceTimer ??= Timer(_grace, () => close('Connection lost'));
+    if (restart && isSharer) unawaited(_restartIce());
+  }
+
+  Future<void> _restartIce() async {
+    final pc = _pc;
+    if (pc == null || _channel.isClosed) {
+      DiagLog.add('ice restart skipped: setup connection closed');
+      return;
+    }
+    try {
+      DiagLog.add('ice restart');
+      final offer = await pc.createOffer({'iceRestart': true});
+      await pc.setLocalDescription(offer);
+      _channel.send({
+        't': 'offer',
+        'sdp': offer.sdp,
+        'mac': PairingService.mac(_code, offer.sdp ?? ''),
+      });
+    } catch (e) {
+      DiagLog.add('ice restart failed: $e');
+    }
+  }
+
   Future<void> _onMessage(Map<String, dynamic> m) async {
     final pc = _pc;
     if (pc == null || phase == SessionPhase.ended) return;
@@ -349,7 +428,7 @@ class BeamSession extends ChangeNotifier {
           } else if (_pendingIce.length < 100) {
             _pendingIce.add(cand);
           }
-        case 'quality' when isSharer:
+        case 'quality' when isSharer && m['quality'] is Map:
           _quality = StreamQuality.fromJson(m['quality'], _quality);
           await _applyEncoding();
           notifyListeners();
@@ -436,7 +515,17 @@ class BeamSession extends ChangeNotifier {
   void requestQuality(StreamQuality q) {
     if (isSharer || q == _quality) return;
     _quality = q;
-    _channel.send({'t': 'quality', 'quality': q.toJson()});
+    _sendSession({'t': 'quality', 'quality': q.toJson()});
+  }
+
+  /// Sends a session message over the data channel when it's open (it
+  /// survives a dropped setup connection), otherwise over the setup channel.
+  void _sendSession(Map<String, Object?> m) {
+    if (link.ready.value) {
+      link.sendSessionMessage(m);
+    } else {
+      _channel.send(m);
+    }
   }
 
   Future<void> _pollStats() async {
@@ -512,7 +601,10 @@ class BeamSession extends ChangeNotifier {
     if (phase == SessionPhase.ended) return;
     phase = SessionPhase.ended;
     endReason = reason;
+    DiagLog.add('session ended: $reason');
     _statsTimer?.cancel();
+    _graceTimer?.cancel();
+    if (link.ready.value) link.sendSessionMessage({'t': 'bye'});
     _channel.send({'t': 'bye'});
     _channel.close(reason);
     await _messages?.cancel();

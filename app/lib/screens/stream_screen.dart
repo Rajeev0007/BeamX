@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
@@ -47,6 +48,9 @@ class _StreamScreenState extends State<StreamScreen> {
     super.initState();
     s.addListener(_onSession);
     _scheduleHide();
+    // A sleeping screen pauses the app, and phones then cut its network,
+    // which ended sessions with "connection lost". Stay awake meanwhile.
+    WakelockPlus.enable().catchError((Object _) {});
   }
 
   @override
@@ -65,6 +69,7 @@ class _StreamScreenState extends State<StreamScreen> {
     s.removeListener(_onSession);
     _settings?.removeListener(_onSettings);
     WindowControl.setOnTop(false);
+    WakelockPlus.disable().catchError((Object _) {});
     if (_fullScreen) WindowControl.setFullScreen(false);
     // Leaving the screen ends the session.
     s.close('You ended the session');
@@ -133,6 +138,9 @@ class _StreamScreenState extends State<StreamScreen> {
                   ),
                   if (s.phase == SessionPhase.connecting)
                     const Positioned.fill(child: _Connecting()),
+                  if (s.reconnecting)
+                    const Positioned.fill(
+                        child: _Connecting(text: 'Connection interrupted. Reconnecting…')),
                   if (s.isSharer)
                     const Positioned(
                         top: 16, left: 0, right: 0, child: _SharingPill()),
@@ -451,19 +459,22 @@ class _StreamScreenState extends State<StreamScreen> {
 }
 
 class _Connecting extends StatelessWidget {
-  const _Connecting();
+  const _Connecting({this.text = 'Connecting…'});
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
+    return ColoredBox(
       color: Colors.black54,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Connecting…', style: TextStyle(color: Colors.white70)),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70)),
           ],
         ),
       ),

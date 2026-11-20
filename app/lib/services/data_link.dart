@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../models/settings.dart';
+import 'diag_log.dart';
 import 'discovery_service.dart';
 import 'input/input_injector.dart';
 import 'prompts.dart';
@@ -46,6 +47,13 @@ class DataLink {
   /// Viewer: whether the other device lets us control it, and its platform.
   final ValueNotifier<RemoteControlStatus> remote =
       ValueNotifier(const RemoteControlStatus(allowed: false, platform: ''));
+
+  /// Session messages (quality, bye) arriving over the data channel.
+  Future<void> Function(Map<String, dynamic>)? onSessionMessage;
+
+  /// Sends a session message over the data channel.
+  void sendSessionMessage(Map<String, Object?> m) =>
+      _sendJson({'t': 'session', 'm': m});
 
   InputInjector? _injector;
   bool _injectorReady = false;
@@ -92,6 +100,7 @@ class DataLink {
       if (s == RTCDataChannelState.RTCDataChannelOpen) {
         _onOpen();
       } else if (s == RTCDataChannelState.RTCDataChannelClosed) {
+        DiagLog.add('data channel closed');
         ready.value = false;
       }
     };
@@ -137,6 +146,12 @@ class DataLink {
     }
     if (m is! Map) return;
     switch (m['t']) {
+      case 'session':
+        final inner = m['m'];
+        if (inner is Map<String, dynamic> && inner['t'] is String &&
+            const {'quality', 'bye'}.contains(inner['t'])) {
+          await onSessionMessage?.call(inner);
+        }
       case 'clip':
         _onClip(m['text']);
       case 'in' when isSharer:

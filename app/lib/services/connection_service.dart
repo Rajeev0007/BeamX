@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../models/peer_device.dart';
 import 'beam_session.dart';
 import 'data_link.dart';
+import 'diag_log.dart';
 import 'discovery_service.dart';
 import 'pairing_service.dart';
 import 'peerjs_relay.dart';
@@ -134,7 +135,11 @@ class ConnectionService {
     r.start();
   }
 
-  void _onRelayStatus() => relayStatus.value = _relay!.status.value;
+  void _onRelayStatus() {
+    final st = _relay!.status.value;
+    DiagLog.add('internet: ${st.state.name}${st.message == null ? '' : ' (${st.message})'}');
+    relayStatus.value = st;
+  }
 
   Future<void> _onRelayIncoming(SignalingTransport t, String from) async {
     final ch = SignalingChannel(t);
@@ -194,7 +199,7 @@ class ConnectionService {
       return;
     }
     final ws = await WebSocketTransformer.upgrade(req);
-    ws.pingInterval = const Duration(seconds: 5);
+    ws.pingInterval = const Duration(seconds: 30);
     final ch = SignalingChannel(WebSocketTransport(ws));
     final address = req.connectionInfo?.remoteAddress.address ?? 'unknown';
     await _hostChannel(ch, address);
@@ -210,11 +215,15 @@ class ConnectionService {
       return;
     }
     _handshaking = true;
+    DiagLog.add('incoming connection from $address');
     try {
       await _handshakeAsHost(ch, address, iceServers);
+      DiagLog.add('incoming connection accepted');
     } on SignalingException catch (e) {
+      DiagLog.add('incoming connection refused: ${e.message}');
       ch.close(e.message);
     } catch (e) {
+      DiagLog.add('incoming connection failed: $e');
       ch.close('handshake failed');
     } finally {
       _handshaking = false;
@@ -418,6 +427,8 @@ class ConnectionService {
       throw SignalingException(ScreenCapture.unsupportedReason);
     }
     _handshaking = true;
+    DiagLog.add('connecting to ${peer.viaInternet ? 'internet ID ${peer.internetId}' : peer.address} '
+        '(${mode.name}, ${password != null ? 'password' : code != null ? 'code' : 'trusted'})');
     try {
       final SignalingChannel ch;
       final internetId = peer.internetId;
@@ -438,9 +449,13 @@ class ConnectionService {
         }
       }
       try {
-        return await _handshakeAsClient(ch, peer, code, password, mode, allowControl,
+        final session = await _handshakeAsClient(ch, peer, code, password, mode,
+            allowControl,
             internetId != null ? (_relay?.iceServers ?? const []) : const []);
-      } catch (_) {
+        DiagLog.add('connected, starting stream');
+        return session;
+      } catch (e) {
+        DiagLog.add('connection failed: $e');
         ch.close('failed');
         rethrow;
       }
