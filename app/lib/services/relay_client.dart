@@ -20,13 +20,28 @@ class RelayStatus {
   final String? message;
 }
 
+/// A way to reach devices over the internet: your own BeamX server
+/// ([RelayClient]) or the free public server ([PeerJsRelay]).
+abstract class InternetRelay {
+  ValueNotifier<RelayStatus> get status;
+
+  /// STUN/TURN servers to use for internet sessions.
+  List<Map<String, dynamic>> get iceServers;
+
+  void start();
+  void stop();
+
+  /// Rings the device with [internetId]. Throws if it's offline or busy.
+  Future<SignalingTransport> dial(String internetId);
+}
+
 /// Keeps this device reachable through a BeamX internet relay server
 /// (see server/README.md) and opens relayed signaling sessions.
 ///
 /// The server only passes messages along. The pairing proof and the
 /// authenticated offer/answer protect the session end to end, exactly as on
 /// the local network.
-class RelayClient {
+class RelayClient implements InternetRelay {
   RelayClient({
     required this.url,
     required this.deviceId,
@@ -43,12 +58,14 @@ class RelayClient {
   final String key;
 
   /// Called when another device rings us.
-  final void Function(RelayTransport transport, String fromInternetId) onIncoming;
+  final void Function(SignalingTransport transport, String fromInternetId) onIncoming;
 
+  @override
   final ValueNotifier<RelayStatus> status =
       ValueNotifier(const RelayStatus(RelayState.off));
 
   /// STUN/TURN servers from the relay, used for internet sessions.
+  @override
   List<Map<String, dynamic>> iceServers = const [];
 
   WebSocket? _ws;
@@ -72,6 +89,7 @@ class RelayClient {
       ? '${internetId.substring(0, 3)} ${internetId.substring(3, 6)} ${internetId.substring(6)}'
       : internetId;
 
+  @override
   void start() {
     _stopped = false;
     _connect();
@@ -166,7 +184,7 @@ class RelayClient {
     }
   }
 
-  /// Rings the device with [internetId]. Throws if it's offline or busy.
+  @override
   Future<RelayTransport> dial(String internetId) async {
     if (status.value.state != RelayState.online) {
       throw SignalingException('Not connected to the internet server');
@@ -188,6 +206,7 @@ class RelayClient {
     return t;
   }
 
+  @override
   void stop() {
     _stopped = true;
     _retry?.cancel();

@@ -7,7 +7,7 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.8 (preview).** Live screen sharing and remote control over
+> **Status: v0.9 (preview).** Live screen sharing and remote control over
 > the same Wi-Fi work between Windows, macOS, Linux and Android, and
 > iPhones can view and control. Sound is shared from Windows and Linux.
 > File transfer, clipboard, trusted devices, QR pairing, screenshots,
@@ -51,9 +51,9 @@ See [SECURITY.md](SECURITY.md) for how to report a problem.
 **With ID and password (like AnyDesk):**
 1. On the device you want to reach, open **Settings → Access from anywhere**,
    turn on **Allow connecting with a password** and set a password.
-   Optionally turn on **Connect from anywhere** (needs an
-   [internet server](server/README.md)) and hide the device from nearby lists
-   with the switch on the main screen.
+   To reach it from other networks, also turn on **Connect from anywhere**
+   (no setup needed). Hide it from nearby lists with the switch on the main
+   screen.
 2. Note its **Your ID** from the main screen.
 3. On the other device, type that ID in **Connect to ID**, choose
    **View their screen**, enter the password and tap **Connect**.
@@ -79,7 +79,8 @@ time it connects without a code.
 - Sound from shared Windows and Linux screens, with a mute button
 - Screenshots and recording of the stream
 - Works over Wi-Fi, a phone hotspot, a USB cable (Android tethering) or the
-  internet, through a server you host yourself ([guide](server/README.md))
+  internet: no setup with the free public server, or through your own server
+  for the best reliability ([guide](server/README.md))
 - Live stats: resolution, FPS, bitrate, codec and ping
 - Nearby devices appear automatically on the same Wi-Fi
 - Pair with a one-time 6-digit code, QR code or IP address, and approve
