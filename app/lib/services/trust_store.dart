@@ -59,6 +59,7 @@ class TrustStore {
 
   static const _idKey = 'beamx.deviceId';
   static const _relayKeyKey = 'beamx.relayKey';
+  static const _passwordKeyKey = 'beamx.passwordKey';
   static const _mineKey = 'beamx.trustedByMe';
   static const _theirsKey = 'beamx.trustedMe';
 
@@ -111,6 +112,18 @@ class TrustStore {
         _theirsKey, jsonEncode([for (final d in _theirs.values) d.toJson()]));
     trustedByMe.value = List.unmodifiable(_mine.values);
     trustsMe.value = List.unmodifiable(_theirs.values);
+  }
+
+  /// PBKDF2 key of the owner's access password (never the password itself).
+  String? get passwordKey => _prefs.getString(_passwordKeyKey);
+  bool get hasPassword => passwordKey != null;
+
+  Future<void> setPasswordKey(String? key) async {
+    if (key == null) {
+      await _prefs.remove(_passwordKeyKey);
+    } else {
+      await _prefs.setString(_passwordKeyKey, key);
+    }
   }
 
   /// Key to check when device [id] connects without a code.

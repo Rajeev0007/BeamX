@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
 import '../models/settings.dart';
+import '../services/password_auth.dart';
 import '../services/settings_store.dart';
 import '../services/trust_store.dart';
 import '../theme/app_theme.dart';
@@ -23,6 +24,23 @@ class _Entry {
 /// Streaming changes made by hand switch the active profile to "Custom".
 void _setStream(SettingsStore store, BeamSettings Function(BeamSettings) f) =>
     store.update((s) => f(s).copyWith(activeProfile: 'Custom'));
+
+/// Asks for a new access password twice, then stores only its derived key.
+Future<void> _setPassword(BuildContext c, SettingsStore st) async {
+  final scope = AppScope.of(c);
+  final key = await showDialog<String>(
+    context: c,
+    barrierDismissible: false,
+    builder: (_) => _PasswordDialog(hostId: scope.trust.deviceId),
+  );
+  if (key == null) return;
+  await scope.trust.setPasswordKey(key);
+  st.update((x) => x.copyWith(passwordAccess: true));
+  if (c.mounted) {
+    ScaffoldMessenger.of(c).showSnackBar(const SnackBar(
+        content: Text('Password set. Share it only with people you trust.')));
+  }
+}
 
 final _entries = <_Entry>[
   // Streaming
@@ -144,6 +162,69 @@ final _entries = <_Entry>[
             : 'Use a number from 1024 to 65535';
       },
       onSaved: (v) => st.update((x) => x.copyWith(port: int.parse(v))),
+    );
+  }),
+  _Entry('Access from anywhere', 'Connect from anywhere', 'internet remote anywhere online', (c, st, s) {
+    return SwitchListTile(
+      secondary: const Icon(Icons.public_rounded),
+      title: const Text('Connect from anywhere'),
+      subtitle: Text(s.signalingServer.isEmpty
+          ? 'Needs an internet server. Set it in Connection → Internet server.'
+          : 'Stay reachable by ID over the internet while BeamX is open'),
+      value: s.internetEnabled,
+      onChanged: (v) {
+        if (v && s.signalingServer.isEmpty) {
+          ScaffoldMessenger.of(c).showSnackBar(const SnackBar(
+              content: Text('First set Connection → Internet server '
+                  '(see server/README.md)')));
+          return;
+        }
+        st.update((x) => x.copyWith(internetEnabled: v));
+      },
+    );
+  }),
+  _Entry('Access from anywhere', 'Password access', 'password unattended id', (c, st, s) {
+    final has = AppScope.of(c).trust.hasPassword;
+    return Column(
+      children: [
+        SwitchListTile(
+          secondary: const Icon(Icons.key_rounded),
+          title: const Text('Allow connecting with a password'),
+          subtitle: const Text(
+              'People who know this device\'s ID and your password can '
+              'connect without the code, even when you\'re away'),
+          value: s.passwordAccess && has,
+          onChanged: (v) async {
+            if (v) {
+              await _setPassword(c, st);
+            } else {
+              await AppScope.of(c).trust.setPasswordKey(null);
+              st.update((x) => x.copyWith(passwordAccess: false));
+            }
+          },
+        ),
+        if (s.passwordAccess && has) ...[
+          ListTile(
+            leading: const SizedBox(width: 24),
+            title: const Text('Change password'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _setPassword(c, st),
+          ),
+          SwitchListTile(
+            secondary: const SizedBox(width: 24),
+            title: const Text('Still ask me to Allow'),
+            subtitle: const Text('Off: password connections start straight away'),
+            value: s.passwordAsk,
+            onChanged: (v) => st.update((x) => x.copyWith(passwordAsk: v)),
+          ),
+          SwitchListTile(
+            secondary: const SizedBox(width: 24),
+            title: const Text('Password connections can control this device'),
+            value: s.passwordControl,
+            onChanged: (v) => st.update((x) => x.copyWith(passwordControl: v)),
+          ),
+        ],
+      ],
     );
   }),
   _Entry('Connection', 'Internet server', 'signaling relay remote anywhere', (c, st, s) {
@@ -612,6 +693,105 @@ class _ColorDot extends StatelessWidget {
             ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
             : null,
       ),
+    );
+  }
+}
+
+class _PasswordDialog extends StatefulWidget {
+  const _PasswordDialog({required this.hostId});
+  final String hostId;
+
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  final _a = TextEditingController();
+  final _b = TextEditingController();
+  bool _show = false;
+  bool _working = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _a.dispose();
+    _b.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final weak = PasswordAuth.weakness(_a.text);
+    if (weak != null) {
+      setState(() => _error = weak);
+      return;
+    }
+    if (_a.text != _b.text) {
+      setState(() => _error = 'Passwords don\'t match');
+      return;
+    }
+    setState(() {
+      _working = true;
+      _error = null;
+    });
+    final key = await PasswordAuth.deriveKey(_a.text, widget.hostId);
+    if (mounted) Navigator.pop(context, key);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    InputDecoration deco(String label) => InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          suffixIcon: IconButton(
+            icon: Icon(_show ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+            onPressed: () => setState(() => _show = !_show),
+          ),
+        );
+    return AlertDialog(
+      icon: const Icon(Icons.key_rounded, size: 36),
+      title: const Text('Set access password'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Anyone with this device\'s ID and this password can '
+                'connect. Use a long password you don\'t use anywhere else.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _a,
+              obscureText: !_show,
+              enabled: !_working,
+              autofocus: true,
+              decoration: deco('Password'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _b,
+              obscureText: !_show,
+              enabled: !_working,
+              onSubmitted: (_) => _save(),
+              decoration: deco('Repeat password'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _working ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _working ? null : _save,
+          child: _working
+              ? const SizedBox.square(
+                  dimension: 18, child: CircularProgressIndicator(strokeWidth: 2.5))
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }

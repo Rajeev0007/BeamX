@@ -8,6 +8,7 @@ import 'beam_session.dart';
 import 'data_link.dart';
 import 'discovery_service.dart';
 import 'pairing_service.dart';
+import 'password_auth.dart';
 import 'relay_client.dart';
 import 'screen_capture.dart';
 import 'settings_store.dart';
@@ -69,15 +70,26 @@ class IncomingRequest {
 /// or of a trust key) → user approval → accept. After that the
 /// [BeamSession] takes over the channel.
 class ConnectionService {
-  ConnectionService(
-      this._settings, this._pairing, this._trust, this._transfers) {
+  ConnectionService(this._settings, this._pairing, this._trust,
+      this._transfers, this._discovery) {
     _port = _settings.value.port;
-    _relayUrl = _settings.value.signalingServer;
+    _relayUrl = _relayTarget();
     _settings.addListener(_onSettings);
   }
 
   RelayClient? _relay;
   late String _relayUrl;
+  final _lockout = PasswordLockout();
+
+  /// The server to stay connected to, or '' when "connect from anywhere"
+  /// is off.
+  String _relayTarget() {
+    final s = _settings.value;
+    return s.internetEnabled ? s.signalingServer.trim() : '';
+  }
+
+  /// This device's 9-digit ID, shown to people who want to connect.
+  String get myId => RelayClient.internetIdFor(_trust.deviceId);
 
   /// Internet server connection state (off if no server is set).
   final ValueNotifier<RelayStatus> relayStatus =
@@ -113,6 +125,7 @@ class ConnectionService {
   final PairingService _pairing;
   final TrustStore _trust;
   final TransferService _transfers;
+  final DiscoveryService _discovery;
 
   final ValueNotifier<IncomingRequest?> pending = ValueNotifier(null);
   final ValueNotifier<BeamSession?> session = ValueNotifier(null);
@@ -146,7 +159,7 @@ class ConnectionService {
       _port = port;
       start();
     }
-    final url = _settings.value.signalingServer;
+    final url = _relayTarget();
     if (url != _relayUrl) {
       _relayUrl = url;
       _startRelay();
@@ -228,10 +241,33 @@ class ConnectionService {
     final safeName = _clean(name, 40);
     final safePlatform = _clean(platform, 16);
 
-    // Either a trust key (no code) or the current pairing code.
+    // A trust key, the owner's password, or the current pairing code.
     final String key;
     final bool usedTrust;
-    if (hello['trusted'] == true) {
+    var usedPassword = false;
+    final auth = hello['auth'] ?? (hello['trusted'] == true ? 'trust' : 'code');
+    if (auth == 'password') {
+      final pk = _trust.passwordKey;
+      if (!s.passwordAccess || pk == null) {
+        _reject(ch, '${s.deviceName} doesn\'t accept passwords. '
+            'Use its pairing code.', code: 'no-password');
+      }
+      if (_lockout.locked) {
+        _reject(ch, 'Too many wrong passwords. Try again in 10 minutes.',
+            code: 'locked');
+      }
+      if (!PairingService.constantTimeEquals(
+          PairingService.proof(pk, nonce, id), proof)) {
+        _lockout.fail();
+        // A short delay slows down guessing even before the lock.
+        await Future<void>.delayed(const Duration(seconds: 2));
+        _reject(ch, 'Wrong password', code: 'bad-password');
+      }
+      _lockout.success();
+      key = pk;
+      usedTrust = false;
+      usedPassword = true;
+    } else if (auth == 'trust') {
       final secret = _trust.secretFor(id);
       if (secret == null ||
           !PairingService.constantTimeEquals(
@@ -253,8 +289,9 @@ class ConnectionService {
     }
 
     var grantTrust = false;
-    var allowControl = false;
-    final skipApproval = usedTrust && s.autoConnectTrusted;
+    var allowControl = usedPassword && s.passwordControl;
+    final skipApproval = (usedTrust && s.autoConnectTrusted) ||
+        (usedPassword && !s.passwordAsk);
     if (s.requireApproval && !skipApproval) {
       final req = IncomingRequest(
         name: safeName,
@@ -274,11 +311,11 @@ class ConnectionService {
       pending.value = null;
       if (!ok) _reject(ch, '${s.deviceName} declined the request');
       grantTrust = req.trust && !usedTrust;
-      allowControl = req.control;
+      allowControl = req.control || allowControl;
     }
 
     // One-time code: the next pairing needs a new one.
-    if (!usedTrust) _pairing.regenerate();
+    if (!usedTrust && !usedPassword) _pairing.regenerate();
 
     final own = StreamQuality.fromSettings(_settings.value);
     ch.send({
@@ -315,6 +352,33 @@ class ConnectionService {
     ));
   }
 
+  /// Finds the device with [internetId]: on the local network first (even
+  /// if it's hidden), otherwise through the internet server.
+  Future<PeerDevice> resolveId(String internetId) async {
+    if (internetId == myId) {
+      throw SignalingException('That\'s this device\'s own ID');
+    }
+    final local = await _discovery.findById(internetId);
+    if (local != null) return local;
+    if (relayStatus.value.state == RelayState.online) {
+      return PeerDevice(
+        id: 'internet-$internetId',
+        name: 'BeamX ${RelayClient.format(internetId)}',
+        platform: 'unknown',
+        address: 'internet',
+        port: 0,
+        lastSeen: DateTime.now(),
+        internetId: internetId,
+      );
+    }
+    throw SignalingException(
+        relayStatus.value.state == RelayState.off
+            ? 'No device with that ID on this network. To reach devices '
+                'elsewhere, turn on Connect from anywhere in Settings.'
+            : 'No device with that ID on this network, and the internet '
+                'server isn\'t connected right now.');
+  }
+
   /// True if [peer] gave this device a trust key, so no code is needed.
   bool isTrustedBy(PeerDevice peer) => _trust.keyFor(peer.id) != null;
 
@@ -326,6 +390,7 @@ class ConnectionService {
     required String? code,
     required StreamMode mode,
     bool allowControl = false,
+    String? password,
   }) async {
     if (busy) throw SignalingException('Finish the current session first');
     if (mode == StreamMode.share && !ScreenCapture.supported) {
@@ -352,7 +417,7 @@ class ConnectionService {
         }
       }
       try {
-        return await _handshakeAsClient(ch, peer, code, mode, allowControl,
+        return await _handshakeAsClient(ch, peer, code, password, mode, allowControl,
             internetId != null ? (_relay?.iceServers ?? const []) : const []);
       } catch (_) {
         ch.close('failed');
@@ -367,6 +432,7 @@ class ConnectionService {
       SignalingChannel ch,
       PeerDevice peer,
       String? code,
+      String? password,
       StreamMode mode,
       bool allowControl,
       List<Map<String, dynamic>> iceServers) async {
@@ -378,12 +444,20 @@ class ConnectionService {
         hostId is! String || hostId.length > 64) {
       throw SignalingException('Not a BeamX device, or an older BeamX version');
     }
-    final trustKey = code == null ? _trust.keyFor(hostId) : null;
-    final key = code ?? trustKey;
+    final trustKey = code == null && password == null ? _trust.keyFor(hostId) : null;
+    final passwordKey =
+        password == null ? null : await PasswordAuth.deriveKey(password, hostId);
+    final key = code ?? passwordKey ?? trustKey;
     if (key == null) {
-      throw SignalingException('Enter the pairing code shown on ${peer.name}',
+      throw SignalingException(
+          'Enter the password or pairing code of ${peer.name}',
           code: 'need-code');
     }
+    final auth = passwordKey != null
+        ? 'password'
+        : trustKey != null
+            ? 'trust'
+            : 'code';
 
     final s = _settings.value;
     final own = StreamQuality.fromSettings(s);
@@ -393,6 +467,7 @@ class ConnectionService {
       ..._me(),
       'mode': mode.name,
       'trusted': trustKey != null,
+      'auth': auth,
       'proof': PairingService.proof(key, nonce, _trust.deviceId),
       if (mode == StreamMode.view) 'quality': own.toJson(),
     });
