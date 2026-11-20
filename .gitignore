@@ -1,0 +1,29 @@
+# Flutter / Dart
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/pubspec.lock.bak
+*.iml
+.idea/
+.vscode/
+
+# Generated native platform folders (created in CI by tool/prepare_platforms.py)
+app/android/
+app/ios/
+app/macos/
+app/windows/
+app/linux/
+app/web/
+
+# Secrets: never commit signing keys
+*.jks
+*.keystore
+key.properties
+*.p12
+*.mobileprovision
+
+# OS
+.DS_Store
+Thumbs.db
+dist/
