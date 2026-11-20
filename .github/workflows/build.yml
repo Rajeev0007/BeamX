@@ -50,6 +50,11 @@ jobs:
         with:
           node-version: '22'
       - run: node --version && node --test test.mjs
+      # Live check of the free public server used by "Connect from anywhere".
+      # Not required to pass: it's a third-party service.
+      - name: Public PeerJS server check
+        continue-on-error: true
+        run: timeout 90 node peerjs-check.mjs
 
   android:
     needs: analyze
