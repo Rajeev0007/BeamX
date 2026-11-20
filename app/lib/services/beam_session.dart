@@ -305,7 +305,9 @@ class BeamSession extends ChangeNotifier {
 
   Future<void> start() async {
     try {
+      DiagLog.add('step: ${isSharer ? 'sharer' : 'viewer'} session starting');
       await renderer.initialize();
+      DiagLog.add('step: renderer ready');
       final pc = await createPeerConnection(<String, dynamic>{
         // Local network: none, so no outside server is contacted.
         // Internet: the relay's STUN and TURN servers.
@@ -378,30 +380,38 @@ class BeamSession extends ChangeNotifier {
   }
 
   Future<void> _startSharing(RTCPeerConnection pc) async {
+    DiagLog.add('step: starting screen capture');
     final stream = await ScreenCapture.start(
         fps: _quality.fps, audio: _quality.audio);
+    DiagLog.add('step: capture started (${stream.getVideoTracks().length} video, '
+        '${stream.getAudioTracks().length} audio)');
     _localStream = stream;
     renderer.srcObject = stream; // local preview
     final track = stream.getVideoTracks().first;
     track.onEnded = () => close('Screen sharing was stopped');
     _sender = await pc.addTrack(track, stream);
+    DiagLog.add('step: video track added');
     for (final a in stream.getAudioTracks()) {
       await pc.addTrack(a, stream);
     }
     sendingAudio = stream.getAudioTracks().isNotEmpty;
     await _preferCodec(pc, _quality.codec);
+    DiagLog.add('step: codec set');
     link.attach(await pc.createDataChannel(
         'beamx', RTCDataChannelInit()..ordered = true));
     link.attachInput(await pc.createDataChannel(
         'beamx-input', RTCDataChannelInit()..ordered = true));
+    DiagLog.add('step: data channels created');
     // A receive-only audio slot, so the viewer can send its microphone.
     await pc.addTransceiver(
       kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
       init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
     );
+    DiagLog.add('step: mic slot added');
 
     final offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    DiagLog.add('step: offer created');
     _channel.send({
       't': 'offer',
       'sdp': offer.sdp,
@@ -490,7 +500,9 @@ class BeamSession extends ChangeNotifier {
       switch (m['t']) {
         case 'offer' when !isSharer:
           final sdp = _verifiedSdp(m);
+          DiagLog.add('step: offer received');
           await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
+          DiagLog.add('step: offer applied');
           await _flushIce(pc);
           if (wantMic && _mic == null) await _attachMic(pc, sdp);
           final answer = await pc.createAnswer();
