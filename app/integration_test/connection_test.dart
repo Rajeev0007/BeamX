@@ -11,6 +11,8 @@ import 'package:beamx/services/connection_service.dart';
 import 'package:beamx/services/diag_log.dart';
 import 'package:beamx/services/discovery_service.dart';
 import 'package:beamx/services/pairing_service.dart';
+import 'package:beamx/services/password_auth.dart';
+import 'package:beamx/services/relay_client.dart';
 import 'package:beamx/services/settings_store.dart';
 import 'package:beamx/services/transfer_service.dart';
 import 'package:beamx/services/trust_store.dart';
@@ -26,8 +28,11 @@ class _Device {
   final PairingService pairing;
   final ConnectionService connection;
 
-  static Future<_Device> create(String name, String id, int port) async {
+  static Future<_Device> create(String name, String id, int port,
+      {bool internet = false}) async {
     final settings = SettingsStore.memory(BeamSettings(
+      internetEnabled: internet,
+      passwordAccess: internet,
       deviceName: name,
       port: port,
       requireApproval: false,
@@ -89,7 +94,41 @@ void main() {
     );
     final sharer = host.connection.session.value!;
     expect(sharer.isSharer, isTrue);
+    await _streamFor(viewer, sharer, const Duration(seconds: 60));
+  }, timeout: const Timeout(Duration(minutes: 3)));
 
+  testWidgets('connect from anywhere: ID + password over the public server', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final host = await _Device.create('Remote PC', 'c' * 32, 47910, internet: true);
+    final client = await _Device.create('Phone', 'd' * 32, 47911, internet: true);
+    const password = 'correct horse battery';
+    await host.trust.setPasswordKey(
+        await PasswordAuth.deriveKey(password, host.trust.deviceId));
+
+    await _waitFor(
+        () => host.connection.relayStatus.value.state == RelayState.online &&
+            client.connection.relayStatus.value.state == RelayState.online,
+        const Duration(seconds: 30),
+        'both devices online on the public server');
+    DiagLog.add('test: both online, host ID ${host.connection.myId}');
+
+    // Wrong password is refused.
+    final peer = await client.connection.resolveId(host.connection.myId);
+    expect(peer.viaInternet, isTrue);
+    await expectLater(
+      client.connection.connect(
+          peer: peer, code: null, password: 'wrong password!', mode: StreamMode.view),
+      throwsA(predicate((e) => '$e'.contains('Wrong password'))),
+    );
+
+    final viewer = await client.connection.connect(
+        peer: peer, code: null, password: password, mode: StreamMode.view);
+    final sharer = host.connection.session.value!;
+    await _streamFor(viewer, sharer, const Duration(seconds: 30));
+  }, timeout: const Timeout(Duration(minutes: 3)));
+}
+
+Future<void> _streamFor(BeamSession viewer, BeamSession sharer, Duration time) async {
     try {
       await _waitFor(() => viewer.phase == SessionPhase.live || viewer.phase == SessionPhase.ended,
           const Duration(seconds: 30), 'viewer connecting');
@@ -97,9 +136,9 @@ void main() {
       expect(viewer.phase, SessionPhase.live);
       DiagLog.add('test: connected');
 
-      // Video frames arrive and keep arriving for a minute.
+      // Video frames arrive and keep arriving.
       double? lastFps;
-      for (var i = 0; i < 12; i++) {
+      for (var i = 0; i < time.inSeconds ~/ 5; i++) {
         await Future<void>.delayed(const Duration(seconds: 5));
         final st = viewer.stats.value;
         lastFps = st.fps;
@@ -120,6 +159,6 @@ void main() {
       print('===== BeamX diagnostics log =====\n${DiagLog.text}\n=====');
       await viewer.close('test done');
       await sharer.close('test done');
+      await Future<void>.delayed(const Duration(seconds: 2));
     }
-  }, timeout: const Timeout(Duration(minutes: 3)));
 }

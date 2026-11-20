@@ -79,6 +79,21 @@ jobs:
       - run: python3 tool/prepare_platforms.py linux
       - run: xvfb-run -a -s "-screen 0 1280x720x24" flutter test integration_test/connection_test.dart -d linux --reporter expanded --verbose 2>&1 | grep -vE "^\[ +[0-9]+ ms\] (executing|Exit code|<-|->)" | tail -300
 
+  e2e-windows:
+    needs: analyze
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+      - run: python tool/prepare_platforms.py windows
+      - run: flutter test integration_test/connection_test.dart -d windows --reporter expanded --plain-name "two devices"
+
   android:
     needs: analyze
     runs-on: ubuntu-latest
