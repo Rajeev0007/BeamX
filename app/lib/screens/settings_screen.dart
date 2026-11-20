@@ -1,7 +1,10 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
 import '../models/settings.dart';
+import '../services/diag_log.dart';
+import '../services/discovery_service.dart';
 import '../services/password_auth.dart';
 import '../services/settings_store.dart';
 import '../services/trust_store.dart';
@@ -378,6 +381,23 @@ final _entries = <_Entry>[
   }),
 
   // Reset
+  _Entry('About', 'Copy diagnostics log', 'bug report log debug problem', (c, st, s) {
+    return ListTile(
+      leading: const Icon(Icons.bug_report_rounded),
+      title: const Text('Copy diagnostics log'),
+      subtitle: const Text('Connection events from this app session, without '
+          'passwords or codes. Paste it into a bug report.'),
+      onTap: () async {
+        final text = DiagLog.isEmpty ? 'No events yet' : DiagLog.text;
+        await Clipboard.setData(ClipboardData(
+            text: 'BeamX ${DiscoveryService.platform}\n$text'));
+        if (c.mounted) {
+          ScaffoldMessenger.of(c).showSnackBar(
+              const SnackBar(content: Text('Diagnostics log copied')));
+        }
+      },
+    );
+  }),
   _Entry('About', 'Reset all settings', 'default restore', (c, st, s) {
     return ListTile(
       leading: Icon(Icons.restart_alt_rounded,

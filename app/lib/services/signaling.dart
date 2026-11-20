@@ -110,7 +110,7 @@ class SignalingChannel {
     final uri = Uri(scheme: 'ws', host: host, port: port, path: '/beamx');
     final ws = await WebSocket.connect(uri.toString())
         .timeout(const Duration(seconds: 8));
-    ws.pingInterval = const Duration(seconds: 5);
+    ws.pingInterval = const Duration(seconds: 30);
     return SignalingChannel(WebSocketTransport(ws));
   }
 
