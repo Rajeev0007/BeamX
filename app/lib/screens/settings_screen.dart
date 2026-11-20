@@ -374,8 +374,10 @@ final _entries = <_Entry>[
             ),
           FilledButton.tonal(
             onPressed: () async {
-              final dir = await FilePicker.getDirectoryPath();
-              if (dir != null) st.update((x) => x.copyWith(saveFolder: dir));
+              final uri = await FilePicker.pickDirectory();
+              if (uri != null && uri.scheme == 'file') {
+                st.update((x) => x.copyWith(saveFolder: uri.toFilePath()));
+              }
             },
             child: const Text('Change'),
           ),
