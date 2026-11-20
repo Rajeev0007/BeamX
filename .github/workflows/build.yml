@@ -56,6 +56,23 @@ jobs:
         continue-on-error: true
         run: timeout 90 node peerjs-check.mjs
 
+  # Two BeamX devices in one process connect, stream for a minute and must
+  # stay connected. Prints the diagnostics log. (Not required for release.)
+  e2e:
+    needs: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libpulse-dev xvfb libxtst6
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+      - run: python3 tool/prepare_platforms.py linux
+      - run: xvfb-run -a -s "-screen 0 1280x720x24" flutter test integration_test/connection_test.dart -d linux --reporter expanded
+
   android:
     needs: analyze
     runs-on: ubuntu-latest
