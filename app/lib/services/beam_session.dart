@@ -22,6 +22,7 @@ class StreamQuality {
     required this.autoBitrate,
     required this.mbps,
     required this.codec,
+    required this.audio,
   });
 
   factory StreamQuality.fromSettings(BeamSettings s) => StreamQuality(
@@ -30,6 +31,7 @@ class StreamQuality {
         autoBitrate: s.autoBitrate,
         mbps: s.bitrateMbps,
         codec: s.codec,
+        audio: s.audioEnabled && s.audioOutput != AudioOutput.sender,
       );
 
   /// Parses untrusted input, clamping every value to a safe range.
@@ -49,6 +51,7 @@ class StreamQuality {
           ? (j['mbps'] as num).toDouble().clamp(1, 80).toDouble()
           : fallback.mbps,
       codec: codec ?? fallback.codec,
+      audio: j['audio'] is bool ? j['audio'] as bool : fallback.audio,
     );
   }
 
@@ -58,12 +61,16 @@ class StreamQuality {
   final double mbps;
   final VideoCodec codec;
 
+  /// Whether the viewer wants the shared device's sound.
+  final bool audio;
+
   Map<String, Object> toJson() => {
         'resolution': resolution,
         'fps': fps,
         'autoBitrate': autoBitrate,
         'mbps': mbps,
         'codec': codec.name,
+        'audio': audio,
       };
 
   @override
@@ -73,10 +80,12 @@ class StreamQuality {
       other.fps == fps &&
       other.autoBitrate == autoBitrate &&
       other.mbps == mbps &&
-      other.codec == codec;
+      other.codec == codec &&
+      other.audio == audio;
 
   @override
-  int get hashCode => Object.hash(resolution, fps, autoBitrate, mbps, codec);
+  int get hashCode =>
+      Object.hash(resolution, fps, autoBitrate, mbps, codec, audio);
 }
 
 /// Live numbers measured from WebRTC, shown in the stats overlay.
@@ -138,6 +147,26 @@ class BeamSession extends ChangeNotifier {
   double? _lastTimestamp;
 
   SessionPhase phase = SessionPhase.connecting;
+
+  // Sound
+  final List<MediaStreamTrack> _remoteAudio = [];
+  bool _muted = false;
+
+  /// Sharer: whether this device's sound is being sent.
+  bool sendingAudio = false;
+
+  /// Viewer: whether sound is arriving from the other device.
+  bool get receivingAudio => _remoteAudio.isNotEmpty;
+  bool get muted => _muted;
+
+  /// Viewer: mutes or unmutes the other device's sound on this device.
+  void setMuted(bool muted) {
+    _muted = muted;
+    for (final t in _remoteAudio) {
+      t.enabled = !muted;
+    }
+    notifyListeners();
+  }
   String? endReason;
   final ValueNotifier<StreamStats> stats = ValueNotifier(const StreamStats());
   final _ended = Completer<String>();
@@ -177,6 +206,11 @@ class BeamSession extends ChangeNotifier {
         if (dc.label == 'beamx') link.attach(dc);
       };
       pc.onTrack = (e) {
+        if (e.track.kind == 'audio') {
+          _remoteAudio.add(e.track);
+          e.track.enabled = !_muted;
+          notifyListeners();
+        }
         if (e.track.kind == 'video' && e.streams.isNotEmpty) {
           renderer.srcObject = e.streams.first;
           notifyListeners();
@@ -196,12 +230,17 @@ class BeamSession extends ChangeNotifier {
   }
 
   Future<void> _startSharing(RTCPeerConnection pc) async {
-    final stream = await ScreenCapture.start(fps: _quality.fps);
+    final stream = await ScreenCapture.start(
+        fps: _quality.fps, audio: _quality.audio);
     _localStream = stream;
     renderer.srcObject = stream; // local preview
     final track = stream.getVideoTracks().first;
     track.onEnded = () => close('Screen sharing was stopped');
     _sender = await pc.addTrack(track, stream);
+    for (final a in stream.getAudioTracks()) {
+      await pc.addTrack(a, stream);
+    }
+    sendingAudio = stream.getAudioTracks().isNotEmpty;
     await _preferCodec(pc, _quality.codec);
     link.attach(await pc.createDataChannel(
         'beamx', RTCDataChannelInit()..ordered = true));
