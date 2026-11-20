@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
+import 'app_scope.dart';
 import 'services/connection_service.dart';
 import 'services/discovery_service.dart';
 import 'services/pairing_service.dart';

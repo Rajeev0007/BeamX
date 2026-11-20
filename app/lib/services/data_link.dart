@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -23,14 +22,12 @@ import 'trust_store.dart';
 class DataLink {
   DataLink({
     required this.peerName,
-    required SettingsStore settings,
-    required TransferService transfers,
-    required TrustStore trust,
+    required this._settings,
+    required this._transfers,
+    required this._trust,
     this.expectedPeerId,
     this.trustToSend,
-  })  : _settings = settings,
-        _transfers = transfers,
-        _trust = trust;
+  });
 
   static const _chunk = 16 * 1024;
   static const _maxBuffered = 1024 * 1024;
