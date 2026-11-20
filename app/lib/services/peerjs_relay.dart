@@ -22,9 +22,9 @@ import 'signaling.dart';
 class PeerJsRelay implements InternetRelay {
   PeerJsRelay({
     required this.internetId,
-    required String token,
+    required this._token,
     required this.onIncoming,
-  }) : _token = token;
+  });
 
   static const host = '0.peerjs.com';
   static const _idPrefix = 'beamx1-';
@@ -124,12 +124,51 @@ class PeerJsRelay implements InternetRelay {
     _retry = Timer(Duration(seconds: delay), _connect);
   }
 
+  /// The public server only forwards messages shaped like PeerJS ICE
+  /// candidates, and closes connections for messages over ~16 KB. So BeamX
+  /// messages travel as JSON text inside a candidate, in parts if needed.
+  static const _maxPart = 12000;
+
   void _send(String toInternetId, Map<String, Object?> payload) {
     _ws?.add(jsonEncode({
       'type': 'CANDIDATE',
       'dst': peerIdFor(toInternetId),
-      'payload': {'beamx': 1, ...payload},
+      'payload': {
+        'candidate': {
+          'candidate': jsonEncode({'beamx': 1, ...payload}),
+          'sdpMid': '0',
+          'sdpMLineIndex': 0,
+        },
+        'type': 'data',
+        'connectionId': 'dc_beamx',
+      },
     }));
+  }
+
+  void _sendData(String to, String sid, String data) {
+    if (data.length <= _maxPart) {
+      _send(to, {'k': 'relay', 'sid': sid, 'd': data});
+      return;
+    }
+    final n = (data.length / _maxPart).ceil();
+    for (var i = 0; i < n; i++) {
+      final end = min(data.length, (i + 1) * _maxPart);
+      _send(to, {'k': 'part', 'sid': sid, 'i': i, 'n': n, 'd': data.substring(i * _maxPart, end)});
+    }
+  }
+
+  /// Unwraps a BeamX message from a PeerJS candidate payload.
+  static Map<dynamic, dynamic>? _unwrap(Object? payload) {
+    if (payload is! Map) return null;
+    final c = payload['candidate'];
+    final text = c is Map ? c['candidate'] : null;
+    if (text is! String || text.length > SignalingChannel.maxMessageBytes) return null;
+    try {
+      final m = jsonDecode(text);
+      return m is Map && m['beamx'] == 1 ? m : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// The 9-digit ID of a PeerJS sender, or null if it isn't BeamX.
@@ -180,8 +219,8 @@ class PeerJsRelay implements InternetRelay {
     }
 
     final from = _senderId(m['src']);
-    final p = m['payload'];
-    if (from == null || p is! Map || p['beamx'] != 1) return;
+    final p = _unwrap(m['payload']);
+    if (from == null || p == null) return;
     final sid = p['sid'];
     if (sid is! String || !RegExp(r'^[0-9a-f]{16}$').hasMatch(sid)) return;
     switch (p['k']) {
@@ -202,6 +241,19 @@ class PeerJsRelay implements InternetRelay {
         if (t != null && t.peer == from && d is String &&
             d.length <= SignalingChannel.maxMessageBytes) {
           t._incoming.add(d);
+        }
+      case 'part':
+        final t = _sessions[sid];
+        final i = p['i'], n = p['n'], d = p['d'];
+        if (t == null || t.peer != from || i is! int || n is! int || d is! String) return;
+        if (n < 2 || n > 8 || i < 0 || i >= n) return;
+        if (i == 0) t._parts.clear();
+        if (t._parts.length != i) return; // out of order: drop
+        t._parts.add(d);
+        if (t._parts.length == n) {
+          final whole = t._parts.join();
+          t._parts.clear();
+          if (whole.length <= SignalingChannel.maxMessageBytes) t._incoming.add(whole);
         }
       case 'hangup':
         final t = _sessions[sid];
@@ -258,6 +310,7 @@ class _PeerJsTransport implements SignalingTransport {
   /// The other device's 9-digit ID.
   final String peer;
   final _incoming = StreamController<String>();
+  final List<String> _parts = [];
   String? _closeReason;
 
   @override
@@ -265,7 +318,7 @@ class _PeerJsTransport implements SignalingTransport {
 
   @override
   void send(String data) {
-    if (_closeReason == null) _relay._send(peer, {'k': 'relay', 'sid': sid, 'd': data});
+    if (_closeReason == null) _relay._sendData(peer, sid, data);
   }
 
   @override
