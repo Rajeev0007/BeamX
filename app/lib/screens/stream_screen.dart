@@ -130,14 +130,13 @@ class _StreamScreenState extends State<StreamScreen> {
     final page = _page(context);
     if (!_desktop) return page;
     return DropTarget(
-      acceptedKinds: const {DropItemKind.file},
-      onEnter: (_) => setState(() => _dropHover = true),
-      onLeave: () => setState(() => _dropHover = false),
-      onDrop: (d) {
+      onDragEntered: (_) => setState(() => _dropHover = true),
+      onDragExited: (_) => setState(() => _dropHover = false),
+      onDragDone: (d) {
         setState(() => _dropHover = false);
         final paths = [
-          for (final i in d.items.whereType<DropFileItem>())
-            if (i.localPath != null) i.localPath!,
+          for (final f in d.files)
+            if (f is DropItemFile && f.path.isNotEmpty) f.path,
         ];
         if (paths.isNotEmpty && s.link.ready.value) s.link.sendPaths(paths);
       },

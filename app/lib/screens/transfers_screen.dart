@@ -124,15 +124,14 @@ class _SendCardState extends State<_SendCard> {
     final card = _card(context);
     if (!_desktop) return card;
     return DropTarget(
-      acceptedKinds: const {DropItemKind.file},
-      onEnter: (_) => setState(() => _hover = true),
-      onLeave: () => setState(() => _hover = false),
-      onDrop: (d) {
+      onDragEntered: (_) => setState(() => _hover = true),
+      onDragExited: (_) => setState(() => _hover = false),
+      onDragDone: (d) {
         setState(() => _hover = false);
         final s = widget.session;
         final paths = [
-          for (final i in d.items.whereType<DropFileItem>())
-            if (i.localPath != null) i.localPath!,
+          for (final f in d.files)
+            if (f is DropItemFile && f.path.isNotEmpty) f.path,
         ];
         if (s != null && paths.isNotEmpty && s.link.ready.value) {
           s.link.sendPaths(paths);
