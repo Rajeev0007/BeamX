@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
@@ -100,21 +103,57 @@ class TransfersScreen extends StatelessWidget {
   }
 }
 
-class _SendCard extends StatelessWidget {
+class _SendCard extends StatefulWidget {
   const _SendCard({required this.session, required this.scheme, required this.t});
   final BeamSession? session;
   final ColorScheme scheme;
   final TextTheme t;
 
   @override
+  State<_SendCard> createState() => _SendCardState();
+}
+
+class _SendCardState extends State<_SendCard> {
+  bool _hover = false;
+
+  static bool get _desktop =>
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+
+  @override
   Widget build(BuildContext context) {
-    final s = session;
-    return Container(
+    final card = _card(context);
+    if (!_desktop) return card;
+    return DropTarget(
+      acceptedKinds: const {DropItemKind.file},
+      onEnter: (_) => setState(() => _hover = true),
+      onLeave: () => setState(() => _hover = false),
+      onDrop: (d) {
+        setState(() => _hover = false);
+        final s = widget.session;
+        final paths = [
+          for (final i in d.items.whereType<DropFileItem>())
+            if (i.localPath != null) i.localPath!,
+        ];
+        if (s != null && paths.isNotEmpty && s.link.ready.value) {
+          s.link.sendPaths(paths);
+        }
+      },
+      child: card,
+    );
+  }
+
+  Widget _card(BuildContext context) {
+    final s = widget.session;
+    final scheme = widget.scheme;
+    final t = widget.t;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outlineVariant, width: 2),
-        color: scheme.surfaceContainerLow,
+        border: Border.all(
+            color: _hover ? scheme.primary : scheme.outlineVariant, width: 2),
+        color: _hover ? scheme.primaryContainer : scheme.surfaceContainerLow,
       ),
       child: Column(
         children: [
@@ -126,7 +165,9 @@ class _SendCard extends StatelessWidget {
           Text(
             s == null
                 ? 'Start a session from Devices to send files'
-                : 'They\'ll be asked to accept each file',
+                : _desktop
+                    ? 'Drop files here or choose them. They\'ll be asked to accept each one.'
+                    : 'They\'ll be asked to accept each file',
             textAlign: TextAlign.center,
             style: TextStyle(color: scheme.onSurfaceVariant),
           ),

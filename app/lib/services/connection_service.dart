@@ -379,6 +379,7 @@ class ConnectionService {
         trustToSend: trustPayload,
       ),
       iceServers: iceServers,
+      wantMic: role == SessionRole.viewer && s.micSharing,
     ));
   }
 
@@ -547,6 +548,7 @@ class ConnectionService {
         expectedPeerId: hostId,
       ),
       iceServers: iceServers,
+      wantMic: role == SessionRole.viewer && s.micSharing,
     );
     _begin(session);
     return session;

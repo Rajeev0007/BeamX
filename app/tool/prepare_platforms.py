@@ -37,6 +37,9 @@ def android(s: str) -> str:
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.WAKE_LOCK",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        # Mic sharing
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
     ]
     for p in perms:
         if f'"{p}"' not in s:
@@ -81,7 +84,7 @@ PLIST_TEXT = {
     "NSCameraUsageDescription":
         "BeamX uses the camera only to scan pairing QR codes.",
     "NSMicrophoneUsageDescription":
-        "BeamX does not use the microphone yet. This is required by the audio library.",
+        "BeamX uses the microphone only when you turn on mic sharing, so the other device can hear you.",
 }
 
 

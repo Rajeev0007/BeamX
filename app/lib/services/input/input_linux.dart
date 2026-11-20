@@ -26,6 +26,9 @@ const _keysyms = <String, int>{
   'right': 0xff53, 'down': 0xff54, 'pageup': 0xff55, 'pagedown': 0xff56,
   'end': 0xff57, 'shift': 0xffe1, 'ctrl': 0xffe3, 'alt': 0xffe9,
   'meta': 0xffeb, 'space': 0x20,
+  // XF86 media keys
+  'media_play': 0x1008ff14, 'media_next': 0x1008ff17, 'media_prev': 0x1008ff16,
+  'vol_up': 0x1008ff13, 'vol_down': 0x1008ff11, 'vol_mute': 0x1008ff12,
 };
 
 // X buttons: 1 left, 2 middle, 3 right.

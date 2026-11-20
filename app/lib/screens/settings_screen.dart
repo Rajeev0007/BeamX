@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -126,10 +129,11 @@ final _entries = <_Entry>[
   _Entry('Audio', 'Share microphone', 'mic voice', (c, st, s) {
     return SwitchListTile(
       secondary: const Icon(Icons.mic_rounded),
-      title: const Text('Share microphone'),
-      subtitle: const Text('Coming in a later update'),
-      value: false,
-      onChanged: null,
+      title: const Text('Share my microphone when viewing'),
+      subtitle: const Text('The other device plays your voice. Mute it any '
+          'time with the 🎤 button.'),
+      value: s.micSharing,
+      onChanged: (v) => st.update((x) => x.copyWith(micSharing: v)),
     );
   }),
 
@@ -245,6 +249,25 @@ final _entries = <_Entry>[
       ),
     );
   }),
+  if (Platform.isAndroid || Platform.isIOS)
+    _Entry('Control & display', 'Screen rotation', 'rotate orientation portrait landscape lock', (c, st, s) {
+      return _ChoiceRow<String>(
+        title: 'Screen rotation',
+        icon: Icons.screen_rotation_rounded,
+        value: s.orientation,
+        options: const {'auto': 'Auto', 'portrait': 'Portrait', 'landscape': 'Landscape'},
+        onChanged: (v) => st.update((x) => x.copyWith(orientation: v)),
+      );
+    }),
+  _Entry('Control & display', 'Gamepad keys', 'game controller keys wasd arrows', (c, st, s) {
+    return _ChoiceRow<String>(
+      title: 'Gamepad keys',
+      icon: Icons.sports_esports_rounded,
+      value: s.gamepadPreset,
+      options: const {'arrows': 'Arrows + Space', 'wasd': 'WASD + Space'},
+      onChanged: (v) => st.update((x) => x.copyWith(gamepadPreset: v)),
+    );
+  }),
   _Entry('Control & display', 'View only', 'control disable', (c, st, s) {
     return SwitchListTile(
       secondary: const Icon(Icons.visibility_rounded),
@@ -337,6 +360,28 @@ final _entries = <_Entry>[
       trailing: Icon(Icons.check_circle_rounded, color: Colors.green),
     );
   }),
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux)
+    _Entry('Security & privacy', 'Save folder', 'download folder location files', (c, st, s) {
+      return ListTile(
+        leading: const Icon(Icons.folder_rounded),
+        title: const Text('Save received files to'),
+        subtitle: Text(s.saveFolder.isEmpty ? 'Downloads/BeamX (default)' : s.saveFolder),
+        trailing: Wrap(spacing: 4, children: [
+          if (s.saveFolder.isNotEmpty)
+            TextButton(
+              onPressed: () => st.update((x) => x.copyWith(saveFolder: '')),
+              child: const Text('Default'),
+            ),
+          FilledButton.tonal(
+            onPressed: () async {
+              final dir = await FilePicker.getDirectoryPath();
+              if (dir != null) st.update((x) => x.copyWith(saveFolder: dir));
+            },
+            child: const Text('Change'),
+          ),
+        ]),
+      );
+    }),
   _Entry('Security & privacy', 'Clipboard sync', 'copy paste', (c, st, s) {
     return _DropdownRow<ClipboardSync>(
       title: 'Clipboard sync',

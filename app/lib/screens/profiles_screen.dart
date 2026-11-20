@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 import '../models/profile.dart';
+import '../services/settings_store.dart';
 import '../widgets/page_header.dart';
 import '../widgets/pressable.dart';
 
@@ -13,9 +14,10 @@ class ProfilesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = AppScope.of(context).settings;
     return ListenableBuilder(
-      listenable: store,
+      listenable: Listenable.merge([store, store.customProfiles]),
       builder: (context, _) {
         final active = store.value.activeProfile;
+        final custom = store.customProfiles.value;
         return CustomScrollView(
           slivers: [
             const SliverToBoxAdapter(
@@ -54,6 +56,60 @@ class ProfilesScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (custom.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 24, 24, 12),
+                  child: Text('YOUR PROFILES',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2)),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 300,
+                    mainAxisExtent: 150,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final p = custom[i];
+                      return Stack(
+                        children: [
+                          Positioned.fill(
+                            child: _ProfileCard(
+                              profile: StreamProfile(
+                                name: p.name,
+                                description: p.summary,
+                                icon: Icons.bookmark_rounded,
+                                apply: (s) => s,
+                              ),
+                              selected: p.name == active,
+                              onTap: () => store.applyProfile(p),
+                            ),
+                          ),
+                          Positioned(
+                            top: 4,
+                            right: 40,
+                            child: IconButton(
+                              tooltip: 'Delete profile',
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              onPressed: () => store.deleteProfile(p.name),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                    childCount: custom.length,
+                  ),
+                ),
+              ),
+            ],
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -61,6 +117,11 @@ class ProfilesScreen extends StatelessWidget {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
+                    FilledButton.icon(
+                      icon: const Icon(Icons.bookmark_add_rounded),
+                      label: const Text('Save current settings as profile'),
+                      onPressed: () => _saveProfile(context, store),
+                    ),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.ios_share_rounded),
                       label: const Text('Export settings'),
@@ -99,6 +160,39 @@ class ProfilesScreen extends StatelessWidget {
       },
     );
   }
+}
+
+Future<void> _saveProfile(BuildContext context, SettingsStore store) async {
+  final c = TextEditingController();
+  final name = await showDialog<String>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: const Text('Save profile'),
+      content: TextField(
+        controller: c,
+        autofocus: true,
+        maxLength: 30,
+        decoration: const InputDecoration(hintText: 'e.g. Work laptop'),
+        onSubmitted: (v) => Navigator.pop(d, v.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.pop(d, c.text.trim()),
+            child: const Text('Save')),
+      ],
+    ),
+  );
+  c.dispose();
+  if (name == null || name.isEmpty) return;
+  if (StreamProfile.builtIn.any((p) => p.name == name)) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('That name is used by a built-in profile')));
+    }
+    return;
+  }
+  store.saveProfile(name);
 }
 
 class _ProfileCard extends StatelessWidget {

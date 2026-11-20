@@ -84,7 +84,7 @@ class DataLink {
   String? _lastClip;
 
   // Outgoing files, one at a time.
-  final List<PlatformFile> _queue = [];
+  final List<_OutFile> _queue = [];
   bool _sending = false;
   final Map<String, Completer<bool>> _answers = {};
   TransferItem? _outgoing;
@@ -279,7 +279,13 @@ class DataLink {
   Future<void> pickAndSend() async {
     final files = await FilePicker.pickFiles();
     if (files.isEmpty) return;
-    _queue.addAll(files);
+    _queue.addAll(files.map(_OutFile.picked));
+    _pumpQueue();
+  }
+
+  /// Sends files from disk, e.g. dragged onto the window.
+  void sendPaths(List<String> paths) {
+    _queue.addAll(paths.map(_OutFile.path));
     _pumpQueue();
   }
 
@@ -295,7 +301,7 @@ class DataLink {
     }
   }
 
-  Future<void> _sendOne(PlatformFile f) async {
+  Future<void> _sendOne(_OutFile f) async {
     final size = await f.length() ?? 0;
     final id = TrustStore.randomHex(8);
     final item = TransferItem(
@@ -326,7 +332,8 @@ class DataLink {
     _transfers.changed();
     try {
       var lastUi = DateTime.now();
-      await for (final data in f.readAsByteStream()) {
+      await for (final chunk in f.read()) {
+        final data = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
         for (var o = 0; o < data.length; o += _chunk) {
           if (_closed || !ready.value) throw StateError('Connection closed');
           final end = o + _chunk > data.length ? data.length : o + _chunk;
@@ -505,4 +512,31 @@ class RemoteControlStatus {
 
   /// The sharing device's platform: windows, macos, linux or android.
   final String platform;
+}
+
+/// A file to send: picked with the file picker, or a path on disk.
+class _OutFile {
+  _OutFile(this.name, this.length, this.read);
+
+  factory _OutFile.picked(PlatformFile f) =>
+      _OutFile(f.name, f.length, f.readAsByteStream);
+
+  factory _OutFile.path(String p) {
+    final f = File(p);
+    return _OutFile(
+      p.split(RegExp(r'[\\/]')).last,
+      () async {
+        try {
+          return await f.length();
+        } catch (_) {
+          return null;
+        }
+      },
+      f.openRead,
+    );
+  }
+
+  final String name;
+  final Future<int?> Function() length;
+  final Stream<List<int>> Function() read;
 }

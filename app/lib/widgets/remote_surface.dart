@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -62,7 +63,13 @@ class RemoteSurface extends StatefulWidget {
     required this.link,
     required this.child,
     this.scrollSpeed = 1.0,
+    this.platform = '',
   });
+
+  /// The controlled device's platform. On computers, touch input uses
+  /// gestures: tap = click, hold or drag = drag, two fingers = scroll,
+  /// two-finger tap = right-click, three-finger swipe = switch apps.
+  final String platform;
 
   /// Multiplies scroll distances (Settings → Scroll speed).
   final double scrollSpeed;
@@ -88,6 +95,7 @@ class _RemoteSurfaceState extends State<RemoteSurface> {
     for (final k in _keysDown) {
       widget.link.sendInput({'e': 'key', 'k': k, 'd': false});
     }
+    _holdTimer?.cancel();
     _focus.dispose();
     super.dispose();
   }
@@ -108,7 +116,145 @@ class _RemoteSurfaceState extends State<RemoteSurface> {
 
   void _send(Map<String, Object> e) => widget.link.sendInput(e);
 
+  bool get _gestures => const {'windows', 'macos', 'linux'}.contains(widget.platform);
+  bool _isTouch(PointerEvent e) => _gestures && e.kind == PointerDeviceKind.touch;
+
+  // ---------- Touch gestures (controlling a computer from a phone) ----------
+
+  final Map<int, Offset> _touches = {};
+  final Map<int, Offset> _touchStart = {};
+  int _maxTouches = 0;
+  DateTime _gestureStart = DateTime(2000);
+  bool _dragging = false;
+  bool _scrolled = false;
+  Offset? _lastCentroid;
+  Offset _scrollAccum = Offset.zero;
+  Timer? _holdTimer;
+
+  Offset get _centroid {
+    var sum = Offset.zero;
+    for (final p in _touches.values) {
+      sum += p;
+    }
+    return sum / _touches.length.toDouble();
+  }
+
+  void _pointerAt(String kind, Offset local, {int b = 0}) {
+    final p = _norm(local);
+    if (p == null) return;
+    _send({'e': kind, if (kind != 'move') 'b': b, 'x': p.dx, 'y': p.dy});
+  }
+
+  void _startDrag() {
+    if (_dragging || _touches.length != 1) return;
+    _dragging = true;
+    _pointerAt('down', _touchStart.values.first);
+  }
+
+  void _touchDown(PointerDownEvent e) {
+    _focus.requestFocus();
+    _touches[e.pointer] = e.localPosition;
+    _touchStart[e.pointer] = e.localPosition;
+    if (_touches.length == 1) {
+      _maxTouches = 1;
+      _gestureStart = DateTime.now();
+      _dragging = false;
+      _scrolled = false;
+      _scrollAccum = Offset.zero;
+      _pointerAt('move', e.localPosition);
+      _holdTimer = Timer(const Duration(milliseconds: 350), _startDrag);
+    } else {
+      _maxTouches = math.max(_maxTouches, _touches.length);
+      _holdTimer?.cancel();
+      if (_dragging) {
+        _pointerAt('up', e.localPosition);
+        _dragging = false;
+      }
+      _lastCentroid = _centroid;
+    }
+  }
+
+  void _touchMove(PointerMoveEvent e) {
+    if (!_touches.containsKey(e.pointer)) return;
+    _touches[e.pointer] = e.localPosition;
+    if (_touches.length == 1) {
+      if (!_dragging &&
+          (e.localPosition - _touchStart[e.pointer]!).distance > 10) {
+        _holdTimer?.cancel();
+        _startDrag();
+      }
+      if (_dragging) _onMove(e);
+    } else if (_touches.length == 2) {
+      final c = _centroid;
+      final last = _lastCentroid ?? c;
+      _lastCentroid = c;
+      // Natural scrolling: moving fingers up scrolls the content down.
+      _scrollAccum += (last - c) * (2.0 * widget.scrollSpeed);
+      if (_scrollAccum.distance > 6) _scrolled = true;
+      final now = DateTime.now();
+      if (now.difference(_lastMove).inMilliseconds >= 16 && _scrollAccum != Offset.zero) {
+        _lastMove = now;
+        _send({'e': 'wheel', 'dx': _scrollAccum.dx, 'dy': _scrollAccum.dy});
+        _scrollAccum = Offset.zero;
+      }
+    }
+  }
+
+  void _touchUp(PointerEvent e) {
+    final start = _touchStart.remove(e.pointer);
+    final end = _touches.remove(e.pointer) ?? e.localPosition;
+    if (_touches.isNotEmpty) {
+      _lastCentroid = _centroid;
+      return;
+    }
+    _holdTimer?.cancel();
+    final quick = DateTime.now().difference(_gestureStart).inMilliseconds < 400;
+    if (_maxTouches == 1) {
+      if (_dragging) {
+        _pointerAt('up', end);
+      } else if (start != null && e is! PointerCancelEvent) {
+        _pointerAt('down', start);
+        _pointerAt('up', start);
+      }
+      _dragging = false;
+    } else if (_maxTouches == 2 && !_scrolled && quick && start != null) {
+      _pointerAt('down', start, b: 1);
+      _pointerAt('up', start, b: 1);
+    } else if (_maxTouches >= 3 && start != null) {
+      _threeFingerSwipe(end - start);
+    }
+  }
+
+  void _keys(List<String> combo) {
+    for (final k in combo) {
+      _send({'e': 'key', 'k': k, 'd': true});
+    }
+    for (final k in combo.reversed) {
+      _send({'e': 'key', 'k': k, 'd': false});
+    }
+  }
+
+  void _threeFingerSwipe(Offset d) {
+    if (d.distance < 60) return;
+    final mac = widget.platform == 'macos';
+    if (d.dx.abs() > d.dy.abs()) {
+      // Switch apps.
+      final base = mac ? 'meta' : 'alt';
+      _keys(d.dx > 0 ? [base, 'tab'] : [base, 'shift', 'tab']);
+    } else if (d.dy < 0) {
+      // All windows: Task View / Mission Control / Activities.
+      _keys(mac ? ['ctrl', 'up'] : widget.platform == 'linux' ? ['meta'] : ['meta', 'tab']);
+    } else {
+      // Show the desktop / app windows.
+      _keys(mac ? ['ctrl', 'down'] : ['meta', 'd']);
+    }
+    HapticFeedback.lightImpact();
+  }
+
+  // ---------- Mouse and direct touch ----------
+
   void _onDown(PointerDownEvent e) {
+    if (_isTouch(e)) return _touchDown(e);
     _focus.requestFocus();
     final p = _norm(e.localPosition, strict: true);
     if (p == null) return;
@@ -121,6 +267,11 @@ class _RemoteSurfaceState extends State<RemoteSurface> {
     _send({'e': 'down', 'b': b, 'x': p.dx, 'y': p.dy});
   }
 
+  void _onPointerMove(PointerMoveEvent e) {
+    if (_isTouch(e)) return _touchMove(e);
+    _onMove(e);
+  }
+
   void _onMove(PointerEvent e) {
     final now = DateTime.now();
     if (now.difference(_lastMove).inMilliseconds < 16) return; // ~60/s
@@ -130,6 +281,7 @@ class _RemoteSurfaceState extends State<RemoteSurface> {
   }
 
   void _onUp(PointerEvent e) {
+    if (_isTouch(e)) return _touchUp(e);
     final b = _buttonForPointer.remove(e.pointer);
     if (b == null) return;
     final p = _norm(e.localPosition);
@@ -185,7 +337,7 @@ class _RemoteSurfaceState extends State<RemoteSurface> {
         child: Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onDown,
-          onPointerMove: _onMove,
+          onPointerMove: _onPointerMove,
           onPointerHover: _onMove,
           onPointerUp: _onUp,
           onPointerCancel: _onUp,

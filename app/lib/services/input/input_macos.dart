@@ -208,6 +208,8 @@ class MacInput implements InputInjector {
           _post(_hidTap, e);
           _release(e);
         }
+      case KeyPress(:final key, :final down) when mediaKeyNames.contains(key):
+        if (down) await _media(key);
       case KeyPress(:final key, :final down):
         final flag = _flagFor[key];
         if (flag != null) {
@@ -228,6 +230,26 @@ class MacInput implements InputInjector {
       case NavAction():
         break;
     }
+  }
+
+  /// Volume through AppleScript. Play/pause/next/previous go to Music,
+  /// Spotify or whichever of them is running.
+  Future<void> _media(String key) async {
+    const players = ['Spotify', 'Music'];
+    String player(String cmd) => [
+          for (final p in players)
+            'if application "$p" is running then tell application "$p" to $cmd'
+        ].join('\n');
+    final script = switch (key) {
+      'vol_up' => 'set volume output volume ((output volume of (get volume settings)) + 6)',
+      'vol_down' => 'set volume output volume ((output volume of (get volume settings)) - 6)',
+      'vol_mute' => 'set volume output muted (not (output muted of (get volume settings)))',
+      'media_play' => player('playpause'),
+      'media_next' => player('next track'),
+      'media_prev' => player('previous track'),
+      _ => null,
+    };
+    if (script != null) await Process.run('osascript', ['-e', script]);
   }
 
   @override
