@@ -78,6 +78,9 @@ class BeamSettings {
     this.passwordAsk = false,
     this.passwordControl = true,
     this.internetEnabled = false,
+    this.saveFolder = '',
+    this.orientation = 'auto',
+    this.gamepadPreset = 'arrows',
   });
 
   final String deviceName;
@@ -130,6 +133,15 @@ class BeamSettings {
   /// Stay connected to the internet server so others can reach this device.
   final bool internetEnabled;
 
+  /// Folder for received files, screenshots and recordings ('' = default).
+  final String saveFolder;
+
+  /// Phones: 'auto', 'portrait' or 'landscape'.
+  final String orientation;
+
+  /// Gamepad key layout: 'arrows' or 'wasd'.
+  final String gamepadPreset;
+
   BeamSettings copyWith({
     String? deviceName,
     ThemeMode? themeMode,
@@ -160,6 +172,9 @@ class BeamSettings {
     bool? passwordAsk,
     bool? passwordControl,
     bool? internetEnabled,
+    String? saveFolder,
+    String? orientation,
+    String? gamepadPreset,
   }) {
     return BeamSettings(
       deviceName: deviceName ?? this.deviceName,
@@ -192,6 +207,9 @@ class BeamSettings {
       passwordAsk: passwordAsk ?? this.passwordAsk,
       passwordControl: passwordControl ?? this.passwordControl,
       internetEnabled: internetEnabled ?? this.internetEnabled,
+      saveFolder: saveFolder ?? this.saveFolder,
+      orientation: orientation ?? this.orientation,
+      gamepadPreset: gamepadPreset ?? this.gamepadPreset,
     );
   }
 
@@ -225,6 +243,9 @@ class BeamSettings {
         'passwordAsk': passwordAsk,
         'passwordControl': passwordControl,
         'internetEnabled': internetEnabled,
+        'saveFolder': saveFolder,
+        'orientation': orientation,
+        'gamepadPreset': gamepadPreset,
       };
 
   /// Tolerant parser: unknown or malformed values fall back to defaults,
@@ -279,6 +300,9 @@ class BeamSettings {
       passwordAsk: pick('passwordAsk', d.passwordAsk),
       passwordControl: pick('passwordControl', d.passwordControl),
       internetEnabled: pick('internetEnabled', d.internetEnabled),
+      saveFolder: pick('saveFolder', d.saveFolder),
+      orientation: pick('orientation', d.orientation),
+      gamepadPreset: pick('gamepadPreset', d.gamepadPreset),
     );
   }
 }

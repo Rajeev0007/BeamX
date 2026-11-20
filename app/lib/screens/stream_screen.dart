@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:material_ui/material_ui.dart';
@@ -11,6 +13,7 @@ import '../services/input/input_injector.dart';
 import '../services/screen_capture.dart';
 import '../services/settings_store.dart';
 import '../services/window_control.dart';
+import '../widgets/remote_extras.dart';
 import '../widgets/remote_surface.dart';
 
 /// Full-screen view of a live session with an auto-hiding toolbar.
@@ -35,6 +38,11 @@ class _StreamScreenState extends State<StreamScreen> {
   /// Viewer: whether our input goes to the other device (when it allows).
   bool _controlOn = true;
   bool _fullScreen = false;
+  bool _gamepad = false;
+  bool _dropHover = false;
+
+  static bool get _desktop =>
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
   void _toggleFullScreen() {
     setState(() => _fullScreen = !_fullScreen);
@@ -119,6 +127,24 @@ class _StreamScreenState extends State<StreamScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final page = _page(context);
+    if (!_desktop) return page;
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dropHover = true),
+      onDragExited: (_) => setState(() => _dropHover = false),
+      onDragDone: (d) {
+        setState(() => _dropHover = false);
+        final paths = [
+          for (final f in d.files)
+            if (f is DropItemFile && f.path.isNotEmpty) f.path,
+        ];
+        if (paths.isNotEmpty && s.link.ready.value) s.link.sendPaths(paths);
+      },
+      child: page,
+    );
+  }
+
+  Widget _page(BuildContext context) {
     final store = AppScope.of(context).settings;
     return Scaffold(
       backgroundColor: Colors.black,
@@ -157,6 +183,27 @@ class _StreamScreenState extends State<StreamScreen> {
                       right: 16,
                       child: _Stats(session: s),
                     ),
+                  if (_gamepad && !s.isSharer)
+                    Positioned.fill(
+                      child: GamepadOverlay(
+                        link: s.link,
+                        layout: store.value.gamepadPreset,
+                        onClose: () => setState(() => _gamepad = false),
+                      ),
+                    ),
+                  if (_dropHover)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: ColoredBox(
+                          color: Colors.black54,
+                          child: Center(
+                            child: Text('Drop to send to ${s.peerName}',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    ),
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
@@ -187,6 +234,7 @@ class _StreamScreenState extends State<StreamScreen> {
               renderer: s.renderer,
               link: s.link,
               scrollSpeed: _settings?.value.pointerSpeed ?? 1.0,
+              platform: remote.platform,
               child: video,
             )
           : InteractiveViewer(maxScale: 5, child: video),
@@ -278,6 +326,13 @@ class _StreamScreenState extends State<StreamScreen> {
               onTap: () => store.update(
                   (x) => x.copyWith(showStatsOverlay: !x.showStatsOverlay)),
             ),
+            if (s.micAttached)
+              _ToolButton(
+                icon: s.micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+                tooltip: s.micOn ? 'Mute my microphone' : 'Unmute my microphone',
+                active: s.micOn,
+                onTap: () => s.setMicOn(!s.micOn),
+              ),
             if (s.canCapture)
               _ToolButton(
                 icon: Icons.photo_camera_rounded,
@@ -301,7 +356,7 @@ class _StreamScreenState extends State<StreamScreen> {
                   return 'Recording saved: ${path ?? ''}';
                 }),
               ),
-            if (!s.isSharer && s.receivingAudio)
+            if (s.receivingAudio)
               _ToolButton(
                 icon: s.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
                 tooltip: s.muted ? 'Unmute sound' : 'Mute sound',
@@ -357,6 +412,19 @@ class _StreamScreenState extends State<StreamScreen> {
                         icon: Icons.keyboard_rounded,
                         tooltip: 'Keyboard',
                         onTap: () => showRemoteKeyboard(context, s.link),
+                      ),
+                    if (remote.allowed && _controlOn)
+                      _ToolButton(
+                        icon: Icons.music_note_rounded,
+                        tooltip: 'Media remote',
+                        onTap: () => showMediaRemote(context, s.link),
+                      ),
+                    if (remote.allowed && _controlOn && remote.platform != 'android')
+                      _ToolButton(
+                        icon: Icons.sports_esports_rounded,
+                        tooltip: 'Gamepad',
+                        active: _gamepad,
+                        onTap: () => setState(() => _gamepad = !_gamepad),
                       ),
                     if (remote.allowed && _controlOn &&
                         remote.platform == 'android') ...[

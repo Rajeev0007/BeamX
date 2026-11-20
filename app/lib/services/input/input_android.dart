@@ -62,6 +62,8 @@ class AndroidInput implements InputInjector {
           _points.clear();
         case TypeText(:final text):
           await _ch.invokeMethod<bool>('text', {'text': text});
+        case KeyPress(:final key, :final down) when down && mediaKeyNames.contains(key):
+          await _ch.invokeMethod<bool>('media', {'key': key});
         case KeyPress(:final key, :final down) when down:
           if (key == 'backspace' || key == 'enter') {
             await _ch.invokeMethod<bool>('key', {'key': key});

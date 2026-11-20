@@ -7,7 +7,7 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.9 (preview).** Live screen sharing and remote control over
+> **Status: v0.10 (preview).** Live screen sharing and remote control over
 > the same Wi-Fi work between Windows, macOS, Linux and Android, and
 > iPhones can view and control. Sound is shared from Windows and Linux.
 > File transfer, clipboard, trusted devices, QR pairing, screenshots,
@@ -87,7 +87,9 @@ time it connects without a code.
   every connection; trusted devices reconnect without a code
 - Remote control: mouse and keyboard for PCs and Macs, touch for Android,
   only when the owner of the shared device allows it
-- Send files both ways (up to 4 GB each), with accept/decline on the other side
+- Media remote, touch gestures and an on-screen gamepad when controlling
+- Microphone sharing from the viewing device
+- Send files both ways (up to 4 GB each), including drag and drop, with accept/decline on the other side
 - Shared clipboard: copy text on one device, paste on the other
 - Pick which monitor to share on multi-screen PCs
 - Profiles: Battery Saver, Balanced, High Quality, Gaming, Movies

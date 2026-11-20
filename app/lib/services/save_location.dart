@@ -10,7 +10,20 @@ import 'package:path_provider/path_provider.dart';
 class SaveLocation {
   SaveLocation._();
 
+  /// Folder chosen in Settings, or null for the default (computers only).
+  static String? custom;
+
   static Future<Directory> dir() async {
+    final c = custom;
+    if (c != null && c.isNotEmpty) {
+      try {
+        final d = Directory(c);
+        await d.create(recursive: true);
+        return d;
+      } catch (_) {
+        // Fall back to the default if the folder is gone or read-only.
+      }
+    }
     Directory dir;
     if (Platform.isAndroid) {
       dir = Directory('/storage/emulated/0/Download/BeamX');

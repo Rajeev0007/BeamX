@@ -31,7 +31,7 @@
 - [x] Control from a phone or tablet: touch as mouse, on-screen keyboard
 - [x] Consent: off by default, switchable any time on the shared device
 - [x] Smaller Android APKs per phone type
-- [ ] Gamepad mode and custom gesture shortcuts
+- [ ] Custom gesture shortcuts
 - [ ] Control of a second monitor (main screen only for now)
 
 ## v0.5: Sound ✅
@@ -62,7 +62,7 @@
 - [x] Hidden devices: not listed anywhere, but reachable by exact ID
 - [x] "Connect from anywhere" switch
 
-## v0.9: Zero-setup internet (current)
+## v0.9: Zero-setup internet ✅
 - [x] "Connect from anywhere" works with no setup, through the free public PeerJS server
 - [x] Your own server stays available for reliability and mobile networks (TURN)
 - [x] Internet connections check that the answering device really owns the dialed ID
@@ -76,7 +76,25 @@
       (Android doesn't allow apps to do this), connection type (BeamX always
       picks the best connection automatically)
 
+## v0.10: Feature batch (current)
+- [x] Media remote: play/pause, next, previous, volume, slides
+      (Windows, Linux, Android; volume and Music/Spotify on Mac)
+- [x] Touch gestures when controlling a computer from a phone: tap, hold-drag,
+      two-finger scroll, two-finger tap = right-click, three-finger swipes
+- [x] On-screen gamepad that presses keys (Arrows or WASD layout)
+- [x] Microphone sharing from the viewing device, with mute
+- [x] Save your own profiles
+- [x] Drag and drop files to send (computers), choose the save folder
+- [x] Screen rotation lock (phones)
+
 ## Later
+- [ ] Phone notifications, messages and battery on the PC
+- [ ] Calls through the PC
+- [ ] Phone as second monitor or webcam
+- [ ] iPhone screen sharing; Android and Mac system sound
+- [ ] Recording on Windows and Linux
+- [ ] Whiteboard / drawing on the shared screen
+- [ ] More languages
 - [ ] Recording on Windows and Linux
 - [ ] Phone as webcam, microphone or second monitor
 - [ ] Linux AppImage and Flathub

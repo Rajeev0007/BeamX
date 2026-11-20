@@ -14,6 +14,13 @@ const remoteKeyNames = <String>{
   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', //
   'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  // Media remote
+  'media_play', 'media_next', 'media_prev', 'vol_up', 'vol_down', 'vol_mute',
+};
+
+/// Media keys, sent as a press (down + up) by the media remote.
+const mediaKeyNames = <String>{
+  'media_play', 'media_next', 'media_prev', 'vol_up', 'vol_down', 'vol_mute',
 };
 
 /// A validated input event from the viewing device.

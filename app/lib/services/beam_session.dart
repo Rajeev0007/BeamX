@@ -126,7 +126,11 @@ class BeamSession extends ChangeNotifier {
     required this._quality,
     required this.link,
     this.iceServers = const [],
+    this.wantMic = false,
   });
+
+  /// Viewer: send this device's microphone to the sharing device.
+  final bool wantMic;
 
   /// STUN/TURN servers. Empty on the local network (direct connections).
   final List<Map<String, dynamic>> iceServers;
@@ -167,6 +171,52 @@ class BeamSession extends ChangeNotifier {
   // Sound
   final List<MediaStreamTrack> _remoteAudio = [];
   bool _muted = false;
+
+  // Microphone (viewer → sharer)
+  MediaStream? _mic;
+  bool _micOn = true;
+
+  /// Viewer: whether the microphone is being sent.
+  bool get micAttached => _mic != null;
+  bool get micOn => _micOn;
+
+  void setMicOn(bool on) {
+    _micOn = on;
+    for (final t in _mic?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+      t.enabled = on;
+    }
+    notifyListeners();
+  }
+
+  /// Puts the microphone on the offer's receive-only audio slot.
+  Future<void> _attachMic(RTCPeerConnection pc, String offerSdp) async {
+    try {
+      // Find the mid of the audio section the sharer offered as recvonly.
+      String? mid;
+      for (final section in offerSdp.split(RegExp(r'\r?\nm=')).skip(1)) {
+        if (!section.startsWith('audio') || !section.contains('a=recvonly')) continue;
+        mid = RegExp(r'a=mid:(\S+)').firstMatch(section)?.group(1);
+      }
+      if (mid == null) return; // older BeamX on the other side
+      final mic = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+        'audio': {'echoCancellation': true, 'noiseSuppression': true},
+        'video': false,
+      });
+      for (final t in await pc.getTransceivers()) {
+        if (t.mid == mid) {
+          await t.sender.replaceTrack(mic.getAudioTracks().first);
+          await t.setDirection(TransceiverDirection.SendOnly);
+          _mic = mic;
+          DiagLog.add('microphone shared');
+          notifyListeners();
+          return;
+        }
+      }
+      await mic.dispose();
+    } catch (e) {
+      DiagLog.add('microphone not shared: $e');
+    }
+  }
 
   // Screenshots and recording (viewer)
   MediaStreamTrack? _remoteVideo;
@@ -327,6 +377,11 @@ class BeamSession extends ChangeNotifier {
     await _preferCodec(pc, _quality.codec);
     link.attach(await pc.createDataChannel(
         'beamx', RTCDataChannelInit()..ordered = true));
+    // A receive-only audio slot, so the viewer can send its microphone.
+    await pc.addTransceiver(
+      kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+      init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+    );
 
     final offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -405,6 +460,7 @@ class BeamSession extends ChangeNotifier {
           final sdp = _verifiedSdp(m);
           await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
           await _flushIce(pc);
+          if (wantMic && _mic == null) await _attachMic(pc, sdp);
           final answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           _channel.send({
@@ -611,9 +667,13 @@ class BeamSession extends ChangeNotifier {
     await stopRecording();
     await link.close();
     try {
-      for (final t in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      for (final t in [
+        ...?_localStream?.getTracks(),
+        ...?_mic?.getTracks(),
+      ]) {
         await t.stop();
       }
+      await _mic?.dispose();
       await _localStream?.dispose();
       renderer.srcObject = null;
       await _pc?.close();

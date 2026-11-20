@@ -66,11 +66,14 @@ const _vk = <String, int>{
   'pageup': 0x21, 'pagedown': 0x22, 'end': 0x23, 'home': 0x24,
   'left': 0x25, 'up': 0x26, 'right': 0x27, 'down': 0x28,
   'delete': 0x2E, 'meta': 0x5B,
+  'media_play': 0xB3, 'media_next': 0xB0, 'media_prev': 0xB1,
+  'vol_mute': 0xAD, 'vol_down': 0xAE, 'vol_up': 0xAF,
 };
 
 const _extendedKeys = {
   'pageup', 'pagedown', 'end', 'home', 'left', 'up', 'right', 'down', //
-  'delete', 'meta',
+  'delete', 'meta', 'media_play', 'media_next', 'media_prev', 'vol_mute',
+  'vol_down', 'vol_up',
 };
 
 int? _vkFor(String key) {
