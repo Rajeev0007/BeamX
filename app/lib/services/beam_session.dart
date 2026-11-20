@@ -169,6 +169,23 @@ class BeamSession extends ChangeNotifier {
   Timer? _restartTimer;
   bool _everConnected = false;
 
+  /// The native WebRTC library initialises itself on the first connection;
+  /// two at the same moment can crash it, so they're created one by one.
+  static Future<void> _pcLock = Future.value();
+
+  static Future<RTCPeerConnection> _createPeerConnectionSerialized(
+      Map<String, dynamic> config) {
+    final c = Completer<RTCPeerConnection>();
+    _pcLock = _pcLock.then((_) async {
+      try {
+        c.complete(await createPeerConnection(config));
+      } catch (e, st) {
+        c.completeError(e, st);
+      }
+    });
+    return c.future;
+  }
+
   /// Signaling messages are handled one at a time, in order.
   Future<void> _messageChain = Future.value();
 
@@ -308,7 +325,7 @@ class BeamSession extends ChangeNotifier {
       DiagLog.add('step: ${isSharer ? 'sharer' : 'viewer'} session starting');
       await renderer.initialize();
       DiagLog.add('step: renderer ready');
-      final pc = await createPeerConnection(<String, dynamic>{
+      final pc = await _createPeerConnectionSerialized(<String, dynamic>{
         // Local network: none, so no outside server is contacted.
         // Internet: the relay's STUN and TURN servers.
         'iceServers': iceServers,
