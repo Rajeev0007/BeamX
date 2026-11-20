@@ -16,8 +16,14 @@ You can confirm the file is genuine with [the steps at the end](#verify-your-dow
 3. Tap **Install**. If Play Protect shows a warning about an unknown app,
    tap **More details → Install anyway**.
 
-Moving from a preview build to a stable build: uninstall the preview first,
-because preview builds use a temporary signing key.
+When you first share your screen, Android asks:
+- **Allow notifications**: tap **Allow**. The notification shows while sharing.
+- **Start recording or casting with BeamX?**: choose **Entire screen** and tap **Start**.
+- **Run in background** (battery optimisation): tap **Allow**, so sharing
+  doesn't stop when you switch apps.
+
+If your installed BeamX is named `BeamX-android-preview.apk` (v0.1.0-preview),
+uninstall it before installing a newer version. It used a temporary signing key.
 
 ## Windows
 
@@ -25,6 +31,8 @@ because preview builds use a temporary signing key.
 2. Open `beamx.exe`.
 3. If you see **"Windows protected your PC"**, click **More info → Run anyway**.
    This message appears until BeamX's free code-signing certificate is approved.
+4. When **Windows Defender Firewall** asks, tick **Private networks** and
+   click **Allow access**. Without this, other devices can't connect to this PC.
 
 ## macOS
 
@@ -32,8 +40,11 @@ because preview builds use a temporary signing key.
 2. The first time, **right-click BeamX → Open → Open**.
    If macOS still blocks it, go to **System Settings → Privacy & Security**
    and click **Open Anyway**.
-3. Allow **Screen Recording** and **Accessibility** when BeamX asks. These
-   are needed to share your screen and to be controlled remotely.
+3. The first time you share, allow **Screen Recording** for BeamX in
+   **System Settings → Privacy & Security → Screen & System Audio Recording**,
+   then reopen BeamX.
+4. If macOS asks whether BeamX may find devices on your local network,
+   click **Allow**.
 
 ## Linux
 
@@ -41,6 +52,9 @@ because preview builds use a temporary signing key.
 mkdir -p ~/BeamX && tar -xzf BeamX-linux-x64.tar.gz -C ~/BeamX
 ~/BeamX/beamx
 ```
+
+Screen sharing from Linux works best in an **X11** session. On Wayland,
+sharing may not work yet; viewing other screens works on both.
 
 ## iOS (iPhone / iPad)
 
@@ -54,9 +68,15 @@ Apple only allows apps from outside the App Store through sideloading tools.
 With a free Apple ID, sideloaded apps must be refreshed every 7 days.
 AltStore and SideStore can do this automatically.
 
-**iOS limitation:** Apple does not let any app control an iPhone remotely.
-An iPhone can share its screen and control other devices, but it cannot
-be controlled.
+When BeamX asks to find devices on your local network, tap **Allow**.
+
+**iOS limitations:**
+- An iPhone or iPad can **view** other screens. Sharing the iPhone's own
+  screen isn't available yet.
+- Apple does not let any app control an iPhone remotely.
+- iPhones can't discover devices automatically. On the other device, tap
+  **Pair** and connect by address, or connect from the iPhone by typing the
+  other device's IP address.
 
 ## Verify your download
 

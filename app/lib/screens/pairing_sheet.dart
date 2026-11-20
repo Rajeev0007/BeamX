@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show InternetAddress;
+import 'dart:io' show InternetAddress, InternetAddressType, NetworkInterface;
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -23,6 +23,20 @@ Future<void> showPairingSheet(BuildContext context, {PeerDevice? peer}) {
   );
 }
 
+/// This device's local IPv4 addresses, for connecting by address.
+Future<List<String>> _localAddresses() async {
+  try {
+    final ifaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+    return [
+      for (final i in ifaces)
+        for (final a in i.addresses)
+          if (!a.isLoopback && !a.isLinkLocal) a.address,
+    ];
+  } catch (_) {
+    return const [];
+  }
+}
+
 /// Formats "123456" as "123 456".
 String formatCode(String c) =>
     c.length == 6 ? '${c.substring(0, 3)} ${c.substring(3)}' : c;
@@ -37,6 +51,7 @@ class _MyCodeSheet extends StatefulWidget {
 
 class _MyCodeSheetState extends State<_MyCodeSheet> {
   final _address = TextEditingController();
+  final Future<List<String>> _addresses = _localAddresses();
 
   @override
   void dispose() {
@@ -80,6 +95,18 @@ class _MyCodeSheetState extends State<_MyCodeSheet> {
               onPressed: scope.pairing.regenerate,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('New code'),
+            ),
+            FutureBuilder<List<String>>(
+              future: _addresses,
+              builder: (context, snap) {
+                final list = snap.data ?? const <String>[];
+                if (list.isEmpty) return const SizedBox.shrink();
+                return SelectableText(
+                  'This device\'s address: ${list.join(', ')}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                );
+              },
             ),
             const SizedBox(height: 8),
             Container(

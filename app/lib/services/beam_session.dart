@@ -108,12 +108,10 @@ class BeamSession extends ChangeNotifier {
   BeamSession({
     required this.role,
     required this.peerName,
-    required SignalingChannel channel,
-    required String code,
-    required StreamQuality quality,
-  })  : _channel = channel,
-        _code = code,
-        _quality = quality;
+    required this._channel,
+    required this._code,
+    required this._quality,
+  });
 
   final SessionRole role;
   final String peerName;

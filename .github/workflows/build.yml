@@ -195,7 +195,7 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            ${{ contains(github.ref_name, '-') && '> **Preview build.** Live streaming, remote control and file transfer are not ready yet. The Android APK uses a temporary key, so uninstall it before installing a later version.' || '' }}
+            ${{ contains(github.ref_name, '-') && '> **Preview build** for testing before the stable release. See the roadmap for what works so far. If the Android file is named BeamX-android-preview.apk, it uses a temporary key: uninstall it before installing a later version.' || '' }}
 
             ## Install
             See the [install guide](https://github.com/${{ github.repository }}/blob/main/docs/INSTALL.md) for every platform.

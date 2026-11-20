@@ -7,9 +7,10 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.1 (early preview).** The app, its settings, profiles and
-> nearby-device discovery work. Live screen streaming, remote control and
-> file transfer are being built next; see the [roadmap](docs/ROADMAP.md).
+> **Status: v0.2 (preview).** Live screen sharing over the same Wi-Fi
+> works between Windows, macOS, Linux and Android, and iPhones can view.
+> Remote control, sound, USB and internet connections come next; see the
+> [roadmap](docs/ROADMAP.md).
 
 ## Download
 
@@ -42,11 +43,25 @@ Step-by-step instructions for each platform are in the [install guide](docs/INST
 
 See [SECURITY.md](SECURITY.md) for how to report a problem.
 
+## How to use
+
+1. Open BeamX on both devices, connected to the **same Wi-Fi**.
+2. On the first device, tap the other device in the list (or tap **Pair →
+   Connect by address** and type its IP).
+3. Choose **View their screen** or **Share mine**.
+4. Type the **pairing code** shown on the other device's Devices screen.
+5. Tap **Allow** on the other device. The stream starts.
+
+Tap the screen to show the toolbar: disconnect, live stats and quality.
+
 ## Features
 
-- Share your screen and view other screens, in both directions
+- Live screen sharing in both directions over Wi-Fi, end-to-end encrypted
+- Choose resolution (up to 4K), frame rate (up to 120 FPS), bitrate and
+  codec (H.264, H.265, AV1); quality also adapts to the network
+- Live stats: resolution, FPS, bitrate, codec and ping
 - Nearby devices appear automatically on the same Wi-Fi
-- Pair with a QR code, 6-digit code or IP address
+- Pair with a one-time 6-digit code or IP address, and approve every connection
 - Profiles: Battery Saver, Balanced, High Quality, Gaming, Movies
 - Every setting is adjustable: resolution up to 4K, 30–120 FPS, bitrate,
   codec (H.264, H.265, AV1), audio, connection type, controls, theme and colours
@@ -59,11 +74,11 @@ See [SECURITY.md](SECURITY.md) for how to report a problem.
 ```
 app/                Flutter app (one codebase for all 5 platforms)
   lib/models/       Settings, profiles, devices
-  lib/services/     Settings storage, local network discovery
+  lib/services/     Settings, discovery, pairing, signaling, WebRTC sessions
   lib/screens/      Devices, pairing, streaming, transfers, profiles, settings
   tool/             Generates and configures native platform folders
 .github/workflows/  Builds, releases, security scorecard
-docs/               Install guide, signing, roadmap
+docs/               Install guide, owner setup guide, roadmap
 ```
 
 ## Build it yourself
