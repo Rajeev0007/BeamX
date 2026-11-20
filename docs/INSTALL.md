@@ -1,6 +1,7 @@
 # Installing BeamX
 
-Download files from the [latest release](https://github.com/Rajeev0007/BeamX/releases/latest).
+Download files from the [Releases page](https://github.com/Rajeev0007/BeamX/releases).
+Preview releases are marked **Pre-release**.
 
 BeamX is free and not sold through app stores, so some systems ask you to
 confirm the install once. This is normal for apps downloaded from the web.
@@ -8,10 +9,15 @@ You can confirm the file is genuine with [the steps at the end](#verify-your-dow
 
 ## Android
 
-1. Download `BeamX-android.apk` on your phone.
+1. Download `BeamX-android.apk` on your phone
+   (in preview releases it's named `BeamX-android-preview.apk`).
 2. Open it. If asked, tap **Settings** and turn on **Allow from this source**
    for your browser or file manager.
-3. Tap **Install**.
+3. Tap **Install**. If Play Protect shows a warning about an unknown app,
+   tap **More details → Install anyway**.
+
+Moving from a preview build to a stable build: uninstall the preview first,
+because preview builds use a temporary signing key.
 
 ## Windows
 

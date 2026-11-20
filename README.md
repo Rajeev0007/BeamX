@@ -18,11 +18,13 @@ Step-by-step instructions for each platform are in the [install guide](docs/INST
 
 | Platform | File |
 |---|---|
-| Windows 10/11 | `BeamX-windows-x64.zip` |
-| macOS 11+ | `BeamX-macos.dmg` |
+| Windows 10/11 (64-bit) | `BeamX-windows-x64.zip` |
+| macOS | `BeamX-macos.dmg` |
 | Linux (x64) | `BeamX-linux-x64.tar.gz` |
-| Android 7+ | `BeamX-android.apk` |
-| iOS 13+ | `BeamX-ios-unsigned.ipa` (install with AltStore or SideStore) |
+| Android | `BeamX-android.apk` (preview releases: `BeamX-android-preview.apk`) |
+| iPhone / iPad | `BeamX-ios-unsigned.ipa` (install with AltStore or SideStore) |
+
+**Repository owner?** See the [setup guide](docs/SETUP.md).
 
 ## Is it safe?
 
