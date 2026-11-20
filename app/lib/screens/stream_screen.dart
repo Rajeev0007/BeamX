@@ -1,45 +1,83 @@
 import 'dart:async';
 
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
-import '../models/peer_device.dart';
-import '../models/settings.dart';
+import '../services/beam_session.dart';
+import '../services/settings_store.dart';
 
-/// Full-screen streaming view with an auto-hiding floating toolbar.
+/// Full-screen view of a live session with an auto-hiding toolbar.
 ///
-/// v0.1 shows the layout and controls only. The video engine is added in
-/// the next milestone, so no stream data is displayed yet.
+/// Viewer: shows the other device's screen.
+/// Sharer: shows that sharing is active, with a small local preview.
 class StreamScreen extends StatefulWidget {
-  const StreamScreen({super.key, required this.peer, required this.sharingMine});
+  const StreamScreen({super.key, required this.session});
 
-  final PeerDevice peer;
-  final bool sharingMine;
+  final BeamSession session;
 
   @override
   State<StreamScreen> createState() => _StreamScreenState();
 }
 
-class _StreamScreenState extends State<StreamScreen>
-    with SingleTickerProviderStateMixin {
+class _StreamScreenState extends State<StreamScreen> {
   bool _toolbarVisible = true;
   Timer? _hideTimer;
-  late final AnimationController _glow = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 4),
-  )..repeat(reverse: true);
+  bool _popped = false;
+  SettingsStore? _settings;
+
+  BeamSession get s => widget.session;
 
   @override
   void initState() {
     super.initState();
+    s.addListener(_onSession);
     _scheduleHide();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The viewer's quality settings drive the stream.
+    if (_settings != null) return;
+    _settings = AppScope.of(context).settings..addListener(_onSettings);
   }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
-    _glow.dispose();
+    s.removeListener(_onSession);
+    _settings?.removeListener(_onSettings);
+    // Leaving the screen ends the session.
+    s.close('You ended the session');
     super.dispose();
+  }
+
+  void _onSettings() {
+    final store = _settings;
+    if (!mounted || s.isSharer || store == null) return;
+    s.requestQuality(StreamQuality.fromSettings(store.value));
+  }
+
+  void _onSession() {
+    if (!mounted) return;
+    if (s.phase == SessionPhase.ended && !_popped) {
+      _popped = true;
+      final reason = s.endReason;
+      final messenger = ScaffoldMessenger.of(context);
+      final route = ModalRoute.of(context);
+      if (route != null && route.isActive) {
+        Navigator.of(context).removeRoute(route);
+      }
+      if (reason != null && reason != 'You ended the session') {
+        messenger.showSnackBar(SnackBar(
+          content: Text(reason),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    setState(() {});
   }
 
   void _scheduleHide() {
@@ -67,22 +105,30 @@ class _StreamScreenState extends State<StreamScreen>
           child: ListenableBuilder(
             listenable: store,
             builder: (context, _) {
-              final s = store.value;
+              final showStats = store.value.showStatsOverlay;
               return Stack(
                 children: [
-                  Positioned.fill(child: _placeholder(context)),
-                  if (widget.sharingMine)
+                  Positioned.fill(
+                    child: s.isSharer ? _sharerView(context) : _viewerView(),
+                  ),
+                  if (s.phase == SessionPhase.connecting)
+                    const Positioned.fill(child: _Connecting()),
+                  if (s.isSharer)
                     const Positioned(
                         top: 16, left: 0, right: 0, child: _SharingPill()),
-                  if (s.showStatsOverlay)
-                    Positioned(top: 16, right: 16, child: _Stats(s: s)),
+                  if (showStats)
+                    Positioned(
+                      top: s.isSharer ? 64 : 16,
+                      right: 16,
+                      child: _Stats(session: s),
+                    ),
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
                     left: 0,
                     right: 0,
-                    bottom: _toolbarVisible ? 24 : -100,
-                    child: Center(child: _toolbar(context, s)),
+                    bottom: _toolbarVisible || s.isSharer ? 24 : -100,
+                    child: Center(child: _toolbar(context, showStats)),
                   ),
                 ],
               );
@@ -93,59 +139,62 @@ class _StreamScreenState extends State<StreamScreen>
     );
   }
 
-  Widget _placeholder(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AnimatedBuilder(
-      animation: _glow,
-      builder: (context, _) => DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(-0.4 + _glow.value * 0.8, -0.2),
-            radius: 1.2,
-            colors: [scheme.primary.withValues(alpha: 0.35), Colors.black],
-          ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                    widget.sharingMine
-                        ? Icons.screen_share_rounded
-                        : Icons.connected_tv_rounded,
-                    size: 64,
-                    color: Colors.white70),
-                const SizedBox(height: 16),
-                Text(
-                  widget.sharingMine
-                      ? 'Sharing to ${widget.peer.name}'
-                      : 'Viewing ${widget.peer.name}',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+  Widget _viewerView() {
+    return InteractiveViewer(
+      maxScale: 5,
+      child: RTCVideoView(
+        s.renderer,
+        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+        filterQuality: FilterQuality.medium,
+      ),
+    );
+  }
+
+  Widget _sharerView(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 80, 32, 120),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480, maxHeight: 300),
+                child: AspectRatio(
+                  aspectRatio: 16 / 10,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: ColoredBox(
+                      color: Colors.white10,
+                      child: RTCVideoView(s.renderer),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Preview: the streaming engine arrives in the next update.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white60),
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: 24),
+            Text('Sharing your screen with ${s.peerName}',
+                textAlign: TextAlign.center,
+                style: t.headlineSmall
+                    ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            const Text(
+              'You can switch to other apps. Come back here or use the '
+              'notification to stop.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white60),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _toolbar(BuildContext context, BeamSettings s) {
+  Widget _toolbar(BuildContext context, bool showStats) {
     final store = AppScope.of(context).settings;
     return Material(
-      color: Colors.black.withValues(alpha: 0.65),
+      color: Colors.black.withValues(alpha: 0.7),
       shape: const StadiumBorder(),
       elevation: 8,
       child: Padding(
@@ -154,40 +203,24 @@ class _StreamScreenState extends State<StreamScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             _ToolButton(
-              icon: Icons.call_end_rounded,
-              tooltip: 'Disconnect',
+              icon: s.isSharer ? Icons.stop_screen_share_rounded : Icons.call_end_rounded,
+              tooltip: s.isSharer ? 'Stop sharing' : 'Disconnect',
               color: Colors.redAccent,
-              onTap: () => Navigator.pop(context),
+              onTap: () => Navigator.of(context).maybePop(),
             ),
-            _ToolButton(
-              icon: s.audioEnabled
-                  ? Icons.volume_up_rounded
-                  : Icons.volume_off_rounded,
-              tooltip: s.audioEnabled ? 'Mute audio' : 'Unmute audio',
-              onTap: () =>
-                  store.update((x) => x.copyWith(audioEnabled: !x.audioEnabled)),
-            ),
-            if (!widget.sharingMine)
-              _ToolButton(
-                icon: s.viewOnly
-                    ? Icons.visibility_rounded
-                    : Icons.touch_app_rounded,
-                tooltip: s.viewOnly ? 'View only (tap to control)' : 'Control on',
-                onTap: () =>
-                    store.update((x) => x.copyWith(viewOnly: !x.viewOnly)),
-              ),
             _ToolButton(
               icon: Icons.query_stats_rounded,
               tooltip: 'Stats overlay',
-              active: s.showStatsOverlay,
+              active: showStats,
               onTap: () => store.update(
                   (x) => x.copyWith(showStatsOverlay: !x.showStatsOverlay)),
             ),
-            _ToolButton(
-              icon: Icons.high_quality_rounded,
-              tooltip: 'Quality',
-              onTap: () => _qualitySheet(context),
-            ),
+            if (!s.isSharer)
+              _ToolButton(
+                icon: Icons.high_quality_rounded,
+                tooltip: 'Quality',
+                onTap: () => _qualitySheet(context),
+              ),
           ],
         ),
       ),
@@ -203,7 +236,7 @@ class _StreamScreenState extends State<StreamScreen>
       builder: (_) => ListenableBuilder(
         listenable: store,
         builder: (context, _) {
-          final s = store.value;
+          final v = store.value;
           return Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: Column(
@@ -212,31 +245,58 @@ class _StreamScreenState extends State<StreamScreen>
               children: [
                 const Text('Resolution'),
                 const SizedBox(height: 8),
-                Wrap(spacing: 8, children: [
+                Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final r in const [720, 1080, 1440, 2160])
                     ChoiceChip(
                       label: Text(r == 2160 ? '4K' : '${r}p'),
-                      selected: s.resolution == r,
-                      onSelected: (_) =>
-                          store.update((x) => x.copyWith(resolution: r)),
+                      selected: v.resolution == r,
+                      onSelected: (_) => store.update((x) =>
+                          x.copyWith(resolution: r, activeProfile: 'Custom')),
                     ),
                 ]),
                 const SizedBox(height: 16),
                 const Text('Frame rate'),
                 const SizedBox(height: 8),
-                Wrap(spacing: 8, children: [
+                Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final f in const [30, 60, 90, 120])
                     ChoiceChip(
                       label: Text('$f FPS'),
-                      selected: s.fps == f,
-                      onSelected: (_) =>
-                          store.update((x) => x.copyWith(fps: f)),
+                      selected: v.fps == f,
+                      onSelected: (_) => store.update(
+                          (x) => x.copyWith(fps: f, activeProfile: 'Custom')),
                     ),
                 ]),
+                const SizedBox(height: 12),
+                Text(
+                  'The other device lowers these automatically if its screen '
+                  'or network can\'t keep up.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _Connecting extends StatelessWidget {
+  const _Connecting();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Colors.black54,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Connecting…', style: TextStyle(color: Colors.white70)),
+          ],
+        ),
       ),
     );
   }
@@ -292,8 +352,8 @@ class _SharingPill extends StatelessWidget {
             Icon(Icons.fiber_manual_record, size: 12, color: Colors.white),
             SizedBox(width: 6),
             Text('Your screen is being shared',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600)),
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -302,29 +362,41 @@ class _SharingPill extends StatelessWidget {
 }
 
 class _Stats extends StatelessWidget {
-  const _Stats({required this.s});
-  final BeamSettings s;
+  const _Stats({required this.session});
+  final BeamSession session;
 
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(
-        color: Colors.white, fontFeatures: [FontFeature.tabularFigures()]);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Target ${s.resolution}p · ${s.fps} FPS', style: style),
-          Text(
-              'Bitrate ${s.autoBitrate ? 'auto' : '${s.bitrateMbps.round()} Mbps'}',
-              style: style),
-          const Text('Ping —  ·  Measured FPS —', style: style),
-        ],
-      ),
+        color: Colors.white,
+        fontSize: 13,
+        fontFeatures: [FontFeature.tabularFigures()]);
+    return ValueListenableBuilder<StreamStats>(
+      valueListenable: session.stats,
+      builder: (context, st, _) {
+        String n(num? v, [String unit = '']) =>
+            v == null ? '—' : '${v.round()}$unit';
+        final mbps = st.kbps == null ? '—' : (st.kbps! / 1000).toStringAsFixed(1);
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  'Video  ${st.width ?? '—'}×${st.height ?? '—'}'
+                  '${st.codec == null ? '' : ' · ${st.codec}'}',
+                  style: style),
+              Text('FPS    ${n(st.fps)}', style: style),
+              Text('Rate   $mbps Mbps', style: style),
+              Text('Ping   ${n(st.rttMs, ' ms')}', style: style),
+            ],
+          ),
+        );
+      },
     );
   }
 }

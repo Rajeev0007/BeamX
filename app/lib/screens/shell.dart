@@ -1,8 +1,13 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../app_scope.dart';
+import '../services/beam_session.dart';
+import '../services/connection_service.dart';
 import 'devices_screen.dart';
+import 'incoming_request_dialog.dart';
 import 'profiles_screen.dart';
 import 'settings_screen.dart';
+import 'stream_screen.dart';
 import 'transfers_screen.dart';
 
 class _Destination {
@@ -31,6 +36,51 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  ConnectionService? _connection;
+  BeamSession? _shownSession;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_connection != null) return;
+    final c = AppScope.of(context).connection;
+    _connection = c;
+    c.pending.addListener(_onPending);
+    c.session.addListener(_onSession);
+  }
+
+  @override
+  void dispose() {
+    _connection?.pending.removeListener(_onPending);
+    _connection?.session.removeListener(_onSession);
+    super.dispose();
+  }
+
+  /// Another device asked to connect: ask the user.
+  void _onPending() {
+    final req = _connection?.pending.value;
+    if (req == null || !mounted) return;
+    showIncomingRequestDialog(context, req);
+  }
+
+  /// A session started: open the streaming screen.
+  void _onSession() {
+    final s = _connection?.session.value;
+    if (s == null || s == _shownSession || !mounted) return;
+    _shownSession = s;
+    Navigator.of(context).push(PageRouteBuilder<void>(
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, animation, secondary) => StreamScreen(session: s),
+      transitionsBuilder: (context, a, secondary, child) => FadeTransition(
+        opacity: a,
+        child: ScaleTransition(
+          scale: Tween(begin: 0.96, end: 1.0)
+              .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      ),
+    ));
+  }
 
   Widget _page(int i) => switch (i) {
         0 => const DevicesScreen(),

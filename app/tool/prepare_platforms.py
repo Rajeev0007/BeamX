@@ -30,27 +30,57 @@ def android(s: str) -> str:
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        # Screen sharing runs in a foreground service (Android 14+ rules).
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
     ]
     for p in perms:
-        if p not in s:
+        if f'"{p}"' not in s:
             s = s.replace(
                 "<application", f'<uses-permission android:name="{p}"/>\n    <application', 1
             )
+    service = "de.julianassmann.flutter_background.IsolateHolderService"
+    if service not in s:
+        s = s.replace(
+            "</application>",
+            f'    <service android:name="{service}"\n'
+            '            android:enabled="true"\n'
+            '            android:exported="false"\n'
+            '            android:foregroundServiceType="mediaProjection" />\n'
+            "    </application>",
+            1,
+        )
     return re.sub(r'android:label="[^"]*"', 'android:label="BeamX"', s, count=1)
+
+
+PLIST_TEXT = {
+    "NSLocalNetworkUsageDescription":
+        "BeamX finds and connects to your other devices on this network.",
+    # Required by the WebRTC library even though BeamX only captures the screen.
+    "NSCameraUsageDescription":
+        "BeamX does not use the camera yet. This is required by the video library.",
+    "NSMicrophoneUsageDescription":
+        "BeamX does not use the microphone yet. This is required by the audio library.",
+}
+
+
+def add_plist_keys(s: str) -> str:
+    for key, text in PLIST_TEXT.items():
+        if f"<key>{key}</key>" not in s:
+            s = s.replace(
+                "<dict>", f"<dict>\n\t<key>{key}</key>\n\t<string>{text}</string>", 1
+            )
+    return s
 
 
 def ios_plist(s: str) -> str:
     s = re.sub(
         r"(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)", r"\1BeamX\2", s
     )
-    if "NSLocalNetworkUsageDescription" not in s:
-        s = s.replace(
-            "<dict>",
-            "<dict>\n\t<key>NSLocalNetworkUsageDescription</key>\n"
-            "\t<string>BeamX finds and connects to your other devices on this network.</string>",
-            1,
-        )
-    return s
+    return add_plist_keys(s)
 
 
 def mac_entitlements(s: str) -> str:
@@ -85,6 +115,7 @@ def main() -> None:
     for f in ("DebugProfile.entitlements", "Release.entitlements"):
         patch(ROOT / "macos/Runner" / f, mac_entitlements)
     patch(ROOT / "macos/Runner/Configs/AppInfo.xcconfig", mac_name)
+    patch(ROOT / "macos/Runner/Info.plist", add_plist_keys)
     patch(ROOT / "windows/runner/main.cpp", win_name)
     patch(ROOT / "linux/runner/my_application.cc", linux_name)
     # flutter create adds a sample widget test we don't use.

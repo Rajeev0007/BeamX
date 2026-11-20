@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
 import '../models/peer_device.dart';
-import '../models/settings.dart';
 import '../services/discovery_service.dart';
 import '../widgets/page_header.dart';
 import '../widgets/pressable.dart';
@@ -53,6 +52,17 @@ class _DevicesScreenState extends State<DevicesScreen> {
           ),
         ),
         SliverToBoxAdapter(child: _ThisDeviceCard()),
+        SliverToBoxAdapter(
+          child: ValueListenableBuilder<String?>(
+            valueListenable: scope.connection.serverError,
+            builder: (context, err, _) => err == null
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    child: _Banner(text: err),
+                  ),
+          ),
+        ),
         SliverToBoxAdapter(
           child: ValueListenableBuilder<String?>(
             valueListenable: scope.discovery.error,
@@ -143,9 +153,22 @@ class _ThisDeviceCard extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                   color: scheme.onPrimaryContainer)),
                       const SizedBox(height: 2),
+                      ValueListenableBuilder<String>(
+                        valueListenable: AppScope.of(context).pairing.code,
+                        builder: (context, code, _) => Text(
+                          'Pairing code ${formatCode(code)}',
+                          style: TextStyle(
+                              color: scheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures()
+                              ]),
+                        ),
+                      ),
                       Text(
-                        '${s.discoverable ? 'Visible to nearby devices' : 'Hidden'}'
-                        ' · ${s.connectionMode.label}',
+                        s.discoverable
+                            ? 'Visible to nearby devices'
+                            : 'Hidden from nearby devices',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

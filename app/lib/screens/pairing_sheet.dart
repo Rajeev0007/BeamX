@@ -1,16 +1,14 @@
 import 'dart:convert';
 import 'dart:io' show InternetAddress;
-import 'dart:math';
 
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../app_scope.dart';
 import '../models/peer_device.dart';
-import 'stream_screen.dart';
-
-enum StreamDirection { view, share }
+import '../services/connection_service.dart';
+import '../services/screen_capture.dart';
 
 Future<void> showPairingSheet(BuildContext context, {PeerDevice? peer}) {
   final Widget sheet =
@@ -25,12 +23,11 @@ Future<void> showPairingSheet(BuildContext context, {PeerDevice? peer}) {
   );
 }
 
-String _newCode() {
-  final r = Random.secure();
-  return List.generate(6, (_) => r.nextInt(10)).join();
-}
+/// Formats "123456" as "123 456".
+String formatCode(String c) =>
+    c.length == 6 ? '${c.substring(0, 3)} ${c.substring(3)}' : c;
 
-/// Shows this device's one-time pairing code and QR, plus manual connect.
+/// Shows this device's pairing code and QR, plus connect by IP address.
 class _MyCodeSheet extends StatefulWidget {
   const _MyCodeSheet();
 
@@ -39,7 +36,6 @@ class _MyCodeSheet extends StatefulWidget {
 }
 
 class _MyCodeSheetState extends State<_MyCodeSheet> {
-  String _code = _newCode();
   final _address = TextEditingController();
 
   @override
@@ -54,103 +50,111 @@ class _MyCodeSheetState extends State<_MyCodeSheet> {
     final s = scope.settings.value;
     final scheme = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
-    final qrData = jsonEncode({
-      'app': 'beamx',
-      'id': scope.discovery.selfId,
-      'name': s.deviceName,
-      'port': s.port,
-      'code': _code,
-    });
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
           24, 0, 24, 24 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Pair a device',
-              style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('Scan this QR or enter the code on the other device',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: scheme.onSurfaceVariant)),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+      child: ValueListenableBuilder<String>(
+        valueListenable: scope.pairing.code,
+        builder: (context, code, _) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Pair a device',
+                style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('On the other device, tap this device and enter the code',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.onSurfaceVariant)),
+            const SizedBox(height: 20),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+              child: SelectableText(
+                formatCode(code),
+                key: ValueKey(code),
+                style: t.displaySmall
+                    ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 6),
+              ),
             ),
-            child: QrImageView(data: qrData, size: 200),
-          ),
-          const SizedBox(height: 20),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-            child: SelectableText(
-              '${_code.substring(0, 3)} ${_code.substring(3)}',
-              key: ValueKey(_code),
-              style: t.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w800, letterSpacing: 6),
+            TextButton.icon(
+              onPressed: scope.pairing.regenerate,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('New code'),
             ),
-          ),
-          TextButton.icon(
-            onPressed: () => setState(() => _code = _newCode()),
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('New code'),
-          ),
-          const Divider(height: 32),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Or connect by address',
-                style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _address,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(
-              hintText: 'e.g. 192.168.1.20',
-              prefixIcon: const Icon(Icons.lan_rounded),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: QrImageView(
+                data: jsonEncode({
+                  'app': 'beamx',
+                  'id': scope.discovery.selfId,
+                  'name': s.deviceName,
+                  'port': s.port,
+                  'code': code,
+                }),
+                size: 160,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () {
-                final addr = _address.text.trim();
-                if (InternetAddress.tryParse(addr) == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Enter a valid IP address')));
-                  return;
-                }
-                // The sheet's own context dies on pop, so reopen from the
-                // navigator's context.
-                final nav = Navigator.of(context);
-                nav.pop();
-                showPairingSheet(nav.context,
-                    peer: PeerDevice(
-                      id: 'manual-$addr',
-                      name: addr,
-                      platform: 'unknown',
-                      address: addr,
-                      port: s.port,
-                      lastSeen: DateTime.now(),
-                    ));
-              },
-              child: const Text('Continue'),
+            const SizedBox(height: 6),
+            Text('QR scanning arrives in a later update',
+                style: t.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+            const Divider(height: 32),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Device not listed? Connect by address',
+                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            TextField(
+              controller: _address,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                hintText: 'e.g. 192.168.1.20',
+                prefixIcon: const Icon(Icons.lan_rounded),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  final addr = _address.text.trim();
+                  if (InternetAddress.tryParse(addr) == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Enter a valid IP address')));
+                    return;
+                  }
+                  // The sheet's own context dies on pop, so reopen from the
+                  // navigator's context.
+                  final nav = Navigator.of(context);
+                  nav.pop();
+                  showPairingSheet(nav.context,
+                      peer: PeerDevice(
+                        id: 'manual-$addr',
+                        name: addr,
+                        platform: 'unknown',
+                        address: addr,
+                        port: s.port,
+                        lastSeen: DateTime.now(),
+                      ));
+                },
+                child: const Text('Continue'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Choose a direction and enter the other device's pairing code.
+/// Choose a direction, enter the other device's code and connect.
 class _ConnectSheet extends StatefulWidget {
   const _ConnectSheet({required this.peer});
   final PeerDevice peer;
@@ -160,8 +164,14 @@ class _ConnectSheet extends StatefulWidget {
 }
 
 class _ConnectSheetState extends State<_ConnectSheet> {
-  StreamDirection _direction = StreamDirection.view;
+  late StreamMode _mode =
+      _canView ? StreamMode.view : StreamMode.share;
   final _code = TextEditingController();
+  bool _connecting = false;
+  String? _error;
+
+  bool get _canView => widget.peer.platform != 'ios';
+  bool get _canShare => ScreenCapture.supported;
 
   @override
   void dispose() {
@@ -170,6 +180,32 @@ class _ConnectSheetState extends State<_ConnectSheet> {
   }
 
   bool get _codeValid => RegExp(r'^\d{6}$').hasMatch(_code.text);
+
+  Future<void> _connect() async {
+    setState(() {
+      _connecting = true;
+      _error = null;
+    });
+    final nav = Navigator.of(context);
+    final route = ModalRoute.of(context);
+    try {
+      await AppScope.of(context).connection.connect(
+            peer: widget.peer,
+            code: _code.text,
+            mode: _mode,
+          );
+      // The app has already opened the streaming screen on top, so remove
+      // this sheet's own route rather than popping the top one.
+      if (route != null && route.isActive) nav.removeRoute(route);
+    } catch (e) {
+      if (!mounted) return;
+      HapticFeedback.heavyImpact();
+      setState(() {
+        _connecting = false;
+        _error = '$e';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -193,8 +229,8 @@ class _ConnectSheetState extends State<_ConnectSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(peer.name,
-                        style: t.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w800)),
+                        style:
+                            t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                     Text('${peer.platformLabel} · ${peer.address}',
                         style: TextStyle(color: scheme.onSurfaceVariant)),
                   ],
@@ -203,74 +239,71 @@ class _ConnectSheetState extends State<_ConnectSheet> {
             ],
           ),
           const SizedBox(height: 20),
-          SegmentedButton<StreamDirection>(
-            style: const ButtonStyle(
-                visualDensity: VisualDensity.comfortable),
-            segments: const [
+          SegmentedButton<StreamMode>(
+            segments: [
               ButtonSegment(
-                value: StreamDirection.view,
-                icon: Icon(Icons.visibility_rounded),
-                label: Text('View their screen'),
+                value: StreamMode.view,
+                enabled: _canView,
+                icon: const Icon(Icons.visibility_rounded),
+                label: const Text('View their screen'),
               ),
               ButtonSegment(
-                value: StreamDirection.share,
-                icon: Icon(Icons.screen_share_rounded),
-                label: Text('Share mine'),
+                value: StreamMode.share,
+                enabled: _canShare,
+                icon: const Icon(Icons.screen_share_rounded),
+                label: const Text('Share mine'),
               ),
             ],
-            selected: {_direction},
-            onSelectionChanged: (v) => setState(() => _direction = v.first),
+            selected: {_mode},
+            onSelectionChanged: _connecting
+                ? null
+                : (v) => setState(() => _mode = v.first),
           ),
+          if (!_canView || !_canShare) ...[
+            const SizedBox(height: 8),
+            Text(
+              !_canView
+                  ? 'iPhones and iPads can\'t share their screen yet.'
+                  : ScreenCapture.unsupportedReason,
+              style: t.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
           const SizedBox(height: 20),
           Text('Pairing code shown on ${peer.name}',
               style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           TextField(
             controller: _code,
+            enabled: !_connecting,
             autofocus: true,
             keyboardType: TextInputType.number,
             maxLength: 6,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => setState(() => _error = null),
+            onSubmitted: (_) => _codeValid && !_connecting ? _connect() : null,
             textAlign: TextAlign.center,
             style: t.headlineSmall?.copyWith(letterSpacing: 8),
             decoration: InputDecoration(
               counterText: '',
               hintText: '••••••',
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16)),
+              errorText: _error,
+              errorMaxLines: 4,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _codeValid
-                  ? () {
-                      final nav = Navigator.of(context);
-                      nav.pop();
-                      nav.push(PageRouteBuilder<void>(
-                        transitionDuration: const Duration(milliseconds: 400),
-                        pageBuilder: (context, animation, secondary) =>
-                            StreamScreen(
-                          peer: peer,
-                          sharingMine: _direction == StreamDirection.share,
-                        ),
-                        transitionsBuilder: (context, a, secondary, child) =>
-                            FadeTransition(
-                          opacity: a,
-                          child: ScaleTransition(
-                            scale: Tween(begin: 0.96, end: 1.0).animate(
-                                CurvedAnimation(
-                                    parent: a, curve: Curves.easeOutCubic)),
-                            child: child,
-                          ),
-                        ),
-                      ));
-                    }
-                  : null,
-              icon: const Icon(Icons.link_rounded),
-              label: const Text('Connect'),
+              onPressed: _codeValid && !_connecting ? _connect : null,
+              icon: _connecting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.5))
+                  : const Icon(Icons.link_rounded),
+              label: Text(_connecting
+                  ? 'Waiting for ${peer.name} to accept…'
+                  : 'Connect'),
             ),
           ),
         ],
