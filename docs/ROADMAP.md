@@ -87,7 +87,7 @@
 - [x] Drag and drop files to send (computers), choose the save folder
 - [x] Screen rotation lock (phones)
 
-## v1.0: First stable release (current)
+## v1.0: First stable release ✅
 - [x] Sharp quality: fixed phone resolution scaling, higher bitrate limits,
       fast start, smooth-frame-rate mode for 60+ FPS
 - [x] Faster response: live touch on Android, separate input channel
@@ -95,6 +95,13 @@
 - [x] Two Android editions: BeamX installs everywhere; BeamX Control can be
       controlled remotely
 - [x] © Rajeev Development; About screen, NOTICE, publisher info in installers
+
+## v1.0.1: Connection fixes (current)
+- [x] Windows firewall rule covers Public networks (Windows 11 default)
+- [x] Automatic two-device tests in CI: local network on Linux and Windows,
+      and ID + password over the internet, streaming for a minute each
+- [x] Version check between devices, clearer failure help with the log
+- [x] Network path details in the diagnostics log
 
 ## Later
 - [ ] Phone notifications, messages and battery on the PC

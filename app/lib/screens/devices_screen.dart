@@ -79,6 +79,17 @@ class _DevicesScreenState extends State<DevicesScreen> {
         const SliverToBoxAdapter(child: _ConnectToId()),
         SliverToBoxAdapter(
           child: ValueListenableBuilder<String?>(
+            valueListenable: scope.connection.versionMismatch,
+            builder: (context, msg, _) => msg == null
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    child: _Banner(text: msg),
+                  ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: ValueListenableBuilder<String?>(
             valueListenable: scope.connection.serverError,
             builder: (context, err, _) => err == null
                 ? const SizedBox.shrink()

@@ -40,9 +40,11 @@ Name: "{autoprograms}\BeamX"; Filename: "{app}\beamx.exe"
 Name: "{autodesktop}\BeamX"; Filename: "{app}\beamx.exe"; Tasks: desktopicon
 
 [Run]
-; Allow BeamX on private (home) networks only, so there's no firewall popup.
+; Allow BeamX on all network types: Windows 11 marks most Wi-Fi networks
+; "Public", where a private-only rule silently blocked connections. Every
+; connection still needs a pairing code, password or trust key.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""BeamX"""; Flags: runhidden
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""BeamX"" dir=in action=allow program=""{app}\beamx.exe"" enable=yes profile=private"; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""BeamX"" dir=in action=allow program=""{app}\beamx.exe"" enable=yes profile=any"; Flags: runhidden
 Filename: "{app}\beamx.exe"; Description: "{cm:LaunchProgram,BeamX}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

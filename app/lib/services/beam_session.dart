@@ -164,6 +164,28 @@ class BeamSession extends ChangeNotifier {
   /// True while the connection is interrupted and BeamX is trying to
   /// restore it.
   bool reconnecting = false;
+  final Map<String, int> _localCandidates = {};
+  final Map<String, int> _remoteCandidates = {};
+
+  /// Logs which network path WebRTC chose (direct, relay, …).
+  Future<void> _logRoute() async {
+    try {
+      final reports = await _pc!.getStats();
+      final byId = {for (final r in reports) r.id: r};
+      for (final r in reports) {
+        final v = r.values;
+        if (r.type == 'candidate-pair' && v['state'] == 'succeeded' &&
+            (v['nominated'] == true || v['nominated'] == 'true')) {
+          final l = byId[v['localCandidateId']]?.values;
+          final rm = byId[v['remoteCandidateId']]?.values;
+          DiagLog.add('route: local ${l?['candidateType']}/${l?['protocol']} '
+              '${l?['networkType'] ?? ''} → remote ${rm?['candidateType']}/${rm?['protocol']}');
+          return;
+        }
+      }
+    } catch (_) {}
+  }
+
   Timer? _graceTimer;
   Timer? _connectTimer;
   Timer? _restartTimer;
@@ -188,6 +210,10 @@ class BeamSession extends ChangeNotifier {
 
   /// Signaling messages are handled one at a time, in order.
   Future<void> _messageChain = Future.value();
+
+  static const couldNotConnect =
+      'Could not connect the video. A firewall, VPN or guest Wi-Fi may be '
+      'blocking the devices from reaching each other.';
 
   /// How long to keep trying after the connection drops.
   static const _grace = Duration(seconds: 30);
@@ -336,6 +362,9 @@ class BeamSession extends ChangeNotifier {
 
       pc.onIceCandidate = (c) {
         if (c.candidate == null) return;
+        final type = RegExp(r' typ (\w+)').firstMatch(c.candidate!)?.group(1) ?? '?';
+        final proto = c.candidate!.toLowerCase().contains(' tcp ') ? 'tcp' : 'udp';
+        _localCandidates['$type/$proto'] = (_localCandidates['$type/$proto'] ?? 0) + 1;
         _channel.send({
           't': 'ice',
           'candidate': c.candidate,
@@ -358,7 +387,13 @@ class BeamSession extends ChangeNotifier {
             break;
         }
       };
-      pc.onIceConnectionState = (s) => DiagLog.add('ice state: ${s.name}');
+      pc.onIceConnectionState = (s) {
+        DiagLog.add('ice state: ${s.name} (local candidates: $_localCandidates, '
+            'remote: $_remoteCandidates)');
+        if (s == RTCIceConnectionState.RTCIceConnectionStateConnected) {
+          unawaited(_logRoute());
+        }
+      };
       pc.onDataChannel = (dc) {
         if (dc.label == 'beamx') link.attach(dc);
         if (dc.label == 'beamx-input') link.attachInput(dc);
@@ -387,9 +422,7 @@ class BeamSession extends ChangeNotifier {
       // If the video never connects (blocked network, crashed peer), don't
       // leave both devices waiting forever.
       _connectTimer = Timer(const Duration(seconds: 40), () {
-        if (!_everConnected) {
-          close('Could not connect. The devices may be on networks that block direct connections.');
-        }
+        if (!_everConnected) close(couldNotConnect);
       });
       _statsTimer =
           Timer.periodic(const Duration(seconds: 1), (_) => _pollStats());
@@ -474,7 +507,7 @@ class BeamSession extends ChangeNotifier {
   void _interrupted({required bool restart}) {
     if (phase == SessionPhase.ended) return;
     if (!_everConnected) {
-      if (restart) close('Could not connect. The devices may be on networks that block direct connections.');
+      if (restart) close(couldNotConnect);
       return;
     }
     if (!reconnecting) {
@@ -546,6 +579,8 @@ class BeamSession extends ChangeNotifier {
           final mid = m['sdpMid'];
           final idx = m['sdpMLineIndex'];
           if (c is! String || c.length > 1024) return;
+          final type = RegExp(r' typ (\w+)').firstMatch(c)?.group(1) ?? '?';
+          _remoteCandidates[type] = (_remoteCandidates[type] ?? 0) + 1;
           final cand = RTCIceCandidate(
               c, mid is String ? mid : null, idx is int ? idx : null);
           if (_remoteSet) {
