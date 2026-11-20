@@ -113,6 +113,15 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force ../dist | Out-Null
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ../dist/BeamX-windows-x64.zip
+      - name: Installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress | Out-Null
+          $env:BEAMX_VERSION = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0-dev' }
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { $iscc = 'iscc' }
+          & $iscc tool\windows\beamx.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
@@ -135,6 +144,7 @@ jobs:
       - run: |
           mkdir -p ../dist
           tar -C build/linux/x64/release/bundle -czf ../dist/BeamX-linux-x64.tar.gz .
+          bash tool/linux/make_deb.sh ../dist/BeamX-linux-amd64.deb
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux

@@ -253,6 +253,29 @@ class _StreamScreenState extends State<StreamScreen> {
               onTap: () => store.update(
                   (x) => x.copyWith(showStatsOverlay: !x.showStatsOverlay)),
             ),
+            if (s.canCapture)
+              _ToolButton(
+                icon: Icons.photo_camera_rounded,
+                tooltip: 'Screenshot',
+                onTap: () => _run(context, () async =>
+                    'Screenshot saved: ${await s.screenshot()}'),
+              ),
+            if (s.canCapture && BeamSession.recordingSupported)
+              _ToolButton(
+                icon: s.recording
+                    ? Icons.stop_circle_rounded
+                    : Icons.fiber_manual_record_rounded,
+                color: s.recording ? Colors.redAccent : null,
+                tooltip: s.recording ? 'Stop recording' : 'Record',
+                onTap: () => _run(context, () async {
+                  if (!s.recording) {
+                    await s.startRecording();
+                    return 'Recording… tap ⏹ to stop';
+                  }
+                  final path = await s.stopRecording();
+                  return 'Recording saved: ${path ?? ''}';
+                }),
+              ),
             if (!s.isSharer && s.receivingAudio)
               _ToolButton(
                 icon: s.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
@@ -329,6 +352,23 @@ class _StreamScreenState extends State<StreamScreen> {
       ),
       ),
     );
+  }
+
+  /// Runs [action] and shows its message, or the error, as a snackbar.
+  Future<void> _run(BuildContext context, Future<String> Function() action) async {
+    final messenger = ScaffoldMessenger.of(context);
+    String msg;
+    try {
+      msg = await action();
+    } catch (e) {
+      msg = 'Failed: $e';
+    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+      ));
   }
 
   void _qualitySheet(BuildContext context) {
