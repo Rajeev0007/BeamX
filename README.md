@@ -7,7 +7,7 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.7 (preview).** Live screen sharing and remote control over
+> **Status: v0.8 (preview).** Live screen sharing and remote control over
 > the same Wi-Fi work between Windows, macOS, Linux and Android, and
 > iPhones can view and control. Sound is shared from Windows and Linux.
 > File transfer, clipboard, trusted devices, QR pairing, screenshots,
@@ -48,6 +48,17 @@ See [SECURITY.md](SECURITY.md) for how to report a problem.
 
 ## How to use
 
+**With ID and password (like AnyDesk):**
+1. On the device you want to reach, open **Settings → Access from anywhere**,
+   turn on **Allow connecting with a password** and set a password.
+   Optionally turn on **Connect from anywhere** (needs an
+   [internet server](server/README.md)) and hide the device from nearby lists
+   with the switch on the main screen.
+2. Note its **Your ID** from the main screen.
+3. On the other device, type that ID in **Connect to ID**, choose
+   **View their screen**, enter the password and tap **Connect**.
+
+**With a one-time code (nobody needs a password):**
 1. Open BeamX on both devices, connected to the **same Wi-Fi**.
 2. On the first device, tap the other device in the list (or tap **Pair →
    Connect by address** and type its IP).

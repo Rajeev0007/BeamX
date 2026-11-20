@@ -48,12 +48,19 @@
 - [x] Linux .deb package
 - [x] Phone hotspot and USB tethering connections, with discovery on every network
 
-## v0.7: Connect anywhere (current)
+## v0.7: Connect anywhere ✅
 - [x] Self-hostable internet server: relay + TURN + automatic HTTPS (server/)
 - [x] 9-digit Internet ID, connect from anywhere with ID + pairing code
 - [x] One-tap internet connect to trusted devices
 - [x] Server tests in CI
 - [ ] Stronger pairing (PAKE) against active attackers
+
+## v0.8: ID + password access (current)
+- [x] Permanent 9-digit ID on the main screen, with a Connect to ID box
+- [x] Owner-set access password (PBKDF2, never stored or sent), lock after 5 wrong tries
+- [x] Password connections start without the Allow prompt (optional)
+- [x] Hidden devices: not listed anywhere, but reachable by exact ID
+- [x] "Connect from anywhere" switch
 
 ## Later
 - [ ] Recording on Windows and Linux

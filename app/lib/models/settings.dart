@@ -74,6 +74,10 @@ class BeamSettings {
     this.clipboardSync = ClipboardSync.both,
     this.discoverable = true,
     this.activeProfile = 'Balanced',
+    this.passwordAccess = false,
+    this.passwordAsk = false,
+    this.passwordControl = true,
+    this.internetEnabled = false,
   });
 
   final String deviceName;
@@ -113,6 +117,19 @@ class BeamSettings {
 
   final String activeProfile;
 
+  // Access from anywhere
+  /// Let devices connect with this device's ID and the owner's password.
+  final bool passwordAccess;
+
+  /// Still show the Allow prompt for password connections.
+  final bool passwordAsk;
+
+  /// Password connections may control this device.
+  final bool passwordControl;
+
+  /// Stay connected to the internet server so others can reach this device.
+  final bool internetEnabled;
+
   BeamSettings copyWith({
     String? deviceName,
     ThemeMode? themeMode,
@@ -139,6 +156,10 @@ class BeamSettings {
     ClipboardSync? clipboardSync,
     bool? discoverable,
     String? activeProfile,
+    bool? passwordAccess,
+    bool? passwordAsk,
+    bool? passwordControl,
+    bool? internetEnabled,
   }) {
     return BeamSettings(
       deviceName: deviceName ?? this.deviceName,
@@ -167,6 +188,10 @@ class BeamSettings {
       clipboardSync: clipboardSync ?? this.clipboardSync,
       discoverable: discoverable ?? this.discoverable,
       activeProfile: activeProfile ?? this.activeProfile,
+      passwordAccess: passwordAccess ?? this.passwordAccess,
+      passwordAsk: passwordAsk ?? this.passwordAsk,
+      passwordControl: passwordControl ?? this.passwordControl,
+      internetEnabled: internetEnabled ?? this.internetEnabled,
     );
   }
 
@@ -196,6 +221,10 @@ class BeamSettings {
         'clipboardSync': clipboardSync.name,
         'discoverable': discoverable,
         'activeProfile': activeProfile,
+        'passwordAccess': passwordAccess,
+        'passwordAsk': passwordAsk,
+        'passwordControl': passwordControl,
+        'internetEnabled': internetEnabled,
       };
 
   /// Tolerant parser: unknown or malformed values fall back to defaults,
@@ -246,6 +275,10 @@ class BeamSettings {
           pickEnum('clipboardSync', ClipboardSync.values, d.clipboardSync),
       discoverable: pick('discoverable', d.discoverable),
       activeProfile: pick('activeProfile', d.activeProfile),
+      passwordAccess: pick('passwordAccess', d.passwordAccess),
+      passwordAsk: pick('passwordAsk', d.passwordAsk),
+      passwordControl: pick('passwordControl', d.passwordControl),
+      internetEnabled: pick('internetEnabled', d.internetEnabled),
     );
   }
 }

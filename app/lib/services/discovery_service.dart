@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/peer_device.dart';
+import 'relay_client.dart';
 import 'settings_store.dart';
 
 /// Finds other BeamX devices on the same local network.
@@ -66,17 +67,50 @@ class DiscoveryService {
     }
   }
 
+  List<int> _announcement({bool hidden = false}) {
+    final s = _settings.value;
+    return utf8.encode(jsonEncode({
+      'app': _magic,
+      'v': _protocolVersion,
+      'id': selfId,
+      'name': s.deviceName,
+      'platform': platform,
+      'port': s.port,
+      if (hidden) 'hidden': true,
+    }));
+  }
+
+  late final String _myInternetId = RelayClient.internetIdFor(selfId);
+  final Map<String, Completer<PeerDevice>> _finding = {};
+
+  /// Looks for the device with [internetId] on the local network, including
+  /// hidden devices (they answer only someone who knows their exact ID).
+  Future<PeerDevice?> findById(String internetId,
+      {Duration timeout = const Duration(milliseconds: 1500)}) async {
+    for (final p in peers.value) {
+      if (RelayClient.internetIdFor(p.id) == internetId) return p;
+    }
+    if (_socket == null || !canBroadcast) return null;
+    final c = _finding.putIfAbsent(internetId, Completer.new);
+    final query = utf8.encode(jsonEncode({'app': _magic, 'v': _protocolVersion, 'q': internetId}));
+    for (final target in {'255.255.255.255', ..._subnetBroadcasts}) {
+      try {
+        _socket?.send(query, InternetAddress(target), discoveryPort);
+      } on SocketException catch (_) {}
+    }
+    try {
+      return await c.future.timeout(timeout);
+    } on TimeoutException {
+      return null;
+    } finally {
+      _finding.remove(internetId);
+    }
+  }
+
   void _tick() {
     final s = _settings.value;
     if (canBroadcast && s.discoverable) {
-      final packet = utf8.encode(jsonEncode({
-        'app': _magic,
-        'v': _protocolVersion,
-        'id': selfId,
-        'name': s.deviceName,
-        'platform': platform,
-        'port': s.port,
-      }));
+      final packet = _announcement();
       // 255.255.255.255 only leaves through the default network, so also
       // send to each network's own broadcast address. This makes discovery
       // work over a phone hotspot or USB tethering next to Wi-Fi.
@@ -111,8 +145,24 @@ class DiscoveryService {
 
   void _handle(Datagram dg) {
     if (dg.data.length > _maxPacketBytes) return;
+    // Someone asks for our exact ID: answer them directly, even if hidden.
+    try {
+      final j = jsonDecode(utf8.decode(dg.data));
+      if (j is Map && j['app'] == _magic && j['q'] is String) {
+        if (j['q'] == _myInternetId && !Platform.isIOS) {
+          _socket?.send(_announcement(hidden: !_settings.value.discoverable),
+              dg.address, dg.port);
+        }
+        return;
+      }
+    } catch (_) {
+      return;
+    }
     final peer = parseAnnouncement(dg.data, dg.address.address, selfId);
     if (peer == null) return;
+    final waiting = _finding[RelayClient.internetIdFor(peer.id)];
+    if (waiting != null && !waiting.isCompleted) waiting.complete(peer);
+    if (peer.hidden) return; // never listed
     _peers[peer.id] = peer;
     _publish();
   }
@@ -140,6 +190,7 @@ class DiscoveryService {
         address: address,
         port: port,
         lastSeen: DateTime.now(),
+        hidden: j['hidden'] == true,
       );
     } catch (_) {
       return null;

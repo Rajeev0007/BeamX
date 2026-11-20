@@ -11,6 +11,7 @@ import '../services/connection_service.dart';
 import '../services/discovery_service.dart';
 import '../services/relay_client.dart';
 import '../services/input/input_injector.dart';
+import '../services/password_auth.dart';
 import '../services/screen_capture.dart';
 import '../services/signaling.dart';
 
@@ -287,8 +288,13 @@ class _ConnectSheetState extends State<_ConnectSheet> {
     super.dispose();
   }
 
+  bool _showSecret = false;
+
+  bool get _isCode => RegExp(r'^\d{6}$').hasMatch(_code.text);
+
+  /// A 6-digit pairing code, or the owner's password (8+ characters).
   bool get _codeValid =>
-      _trusted || RegExp(r'^\d{6}$').hasMatch(_code.text);
+      _trusted || _isCode || _code.text.length >= PasswordAuth.minLength;
 
   Future<void> _connect() async {
     setState(() {
@@ -300,7 +306,8 @@ class _ConnectSheetState extends State<_ConnectSheet> {
     try {
       await AppScope.of(context).connection.connect(
             peer: widget.peer,
-            code: _trusted ? null : _code.text,
+            code: _trusted || !_isCode ? null : _code.text,
+            password: _trusted || _isCode ? null : _code.text,
             mode: _mode,
             allowControl: _allowControl,
           );
@@ -413,23 +420,32 @@ class _ConnectSheetState extends State<_ConnectSheet> {
               ),
             ),
           ] else ...[
-          Text('Pairing code shown on ${peer.name}',
+          Text('Password, or the pairing code shown on ${peer.name}',
               style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           TextField(
             controller: _code,
             enabled: !_connecting,
             autofocus: true,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            keyboardType: TextInputType.visiblePassword,
+            obscureText: !_showSecret && !_isCode,
+            autocorrect: false,
+            enableSuggestions: false,
+            maxLength: 128,
             onChanged: (_) => setState(() => _error = null),
             onSubmitted: (_) => _codeValid && !_connecting ? _connect() : null,
             textAlign: TextAlign.center,
-            style: t.headlineSmall?.copyWith(letterSpacing: 8),
+            style: t.titleLarge?.copyWith(letterSpacing: 2),
             decoration: InputDecoration(
               counterText: '',
-              hintText: '••••••',
+              hintText: '123456 or password',
+              suffixIcon: IconButton(
+                tooltip: _showSecret ? 'Hide' : 'Show',
+                icon: Icon(_showSecret
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded),
+                onPressed: () => setState(() => _showSecret = !_showSecret),
+              ),
               errorText: _error,
               errorMaxLines: 4,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),

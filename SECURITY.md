@@ -17,6 +17,14 @@ Only the latest release receives security fixes.
   are used once, and are replaced after 5 wrong attempts. The code is never
   sent over the network: the connecting device proves it knows the code with
   HMAC-SHA256 over a random challenge.
+- **Access password:** set by the device owner, at least 8 characters.
+  The password is never stored or sent. Both devices derive a key with
+  PBKDF2-HMAC-SHA256 (150,000 iterations, salted with the device ID), and
+  the connecting device proves it has the key with HMAC over a random
+  challenge. After 5 wrong passwords in 10 minutes, password access is
+  refused for 10 minutes, and each wrong try waits 2 seconds.
+- **Hidden devices:** when "Visible nearby" is off, the device is never
+  listed. It answers only a request for its exact 9-digit ID.
 - **Approval:** by default every connection must be accepted on the other
   device, which shows the requester's name, address and what they want.
 - **Encryption:** video is end-to-end encrypted by WebRTC (DTLS-SRTP).

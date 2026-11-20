@@ -16,7 +16,7 @@ Future<void> main() async {
   final discovery = DiscoveryService(settings, trust.deviceId);
   final pairing = PairingService();
   final transfers = TransferService();
-  final connection = ConnectionService(settings, pairing, trust, transfers);
+  final connection = ConnectionService(settings, pairing, trust, transfers, discovery);
   runApp(BeamXApp(
     services: AppServices(
       settings: settings,

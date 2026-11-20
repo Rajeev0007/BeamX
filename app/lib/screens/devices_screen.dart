@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
@@ -75,6 +76,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
           ),
         ),
         SliverToBoxAdapter(child: _ThisDeviceCard()),
+        const SliverToBoxAdapter(child: _ConnectToId()),
         SliverToBoxAdapter(
           child: ValueListenableBuilder<String?>(
             valueListenable: scope.connection.serverError,
@@ -136,14 +138,18 @@ class _DevicesScreenState extends State<DevicesScreen> {
 class _ThisDeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final store = AppScope.of(context).settings;
+    final scope = AppScope.of(context);
+    final store = scope.settings;
     final scheme = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    final on = scheme.onPrimaryContainer;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: ListenableBuilder(
         listenable: store,
         builder: (context, _) {
           final s = store.value;
+          final id = RelayClient.format(scope.connection.myId);
           return Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -154,82 +160,217 @@ class _ThisDeviceCard extends StatelessWidget {
                 end: Alignment.bottomRight,
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: scheme.primary,
-                  child: Icon(Icons.cast_connected_rounded,
-                      color: scheme.onPrimary),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s.deviceName,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(s.deviceName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: scheme.onPrimaryContainer)),
-                      const SizedBox(height: 2),
-                      ValueListenableBuilder<String>(
-                        valueListenable: AppScope.of(context).pairing.code,
-                        builder: (context, code, _) => Text(
-                          'Pairing code ${formatCode(code)}',
-                          style: TextStyle(
-                              color: scheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ]),
-                        ),
+                          style: t.titleSmall?.copyWith(color: on)),
+                    ),
+                    Switch(
+                      value: s.discoverable,
+                      onChanged: (v) =>
+                          store.update((x) => x.copyWith(discoverable: v)),
+                    ),
+                  ],
+                ),
+                Text('Your ID', style: t.labelLarge?.copyWith(color: on)),
+                Row(
+                  children: [
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: SelectableText(id,
+                            style: t.headlineMedium?.copyWith(
+                                color: on,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2,
+                                fontFeatures: const [FontFeature.tabularFigures()])),
                       ),
-                      ValueListenableBuilder<RelayStatus>(
-                        valueListenable: AppScope.of(context).connection.relayStatus,
-                        builder: (context, r, _) => switch (r.state) {
-                          RelayState.off => const SizedBox.shrink(),
-                          RelayState.online => Text(
-                              'Internet ID ${RelayClient.format(r.internetId ?? '')}',
-                              style: TextStyle(
-                                  color: scheme.onPrimaryContainer,
-                                  fontWeight: FontWeight.w700)),
-                          RelayState.connecting => Text(
-                              'Connecting to internet server…',
-                              style: TextStyle(color: scheme.onPrimaryContainer)),
-                          RelayState.error => Text(
-                              'Internet: ${r.message ?? 'offline'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: scheme.onPrimaryContainer)),
+                    ),
+                    IconButton(
+                      tooltip: 'Copy ID',
+                      color: on,
+                      icon: const Icon(Icons.copy_rounded),
+                      onPressed: () {
+                        Clipboard.setData(
+                            ClipboardData(text: scope.connection.myId));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('ID copied')));
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ValueListenableBuilder<String>(
+                      valueListenable: scope.pairing.code,
+                      builder: (context, code, _) => _Chip(
+                          icon: Icons.pin_rounded,
+                          text: 'Code ${formatCode(code)}'),
+                    ),
+                    if (s.passwordAccess && scope.trust.hasPassword)
+                      const _Chip(icon: Icons.key_rounded, text: 'Password on'),
+                    ValueListenableBuilder<RelayStatus>(
+                      valueListenable: scope.connection.relayStatus,
+                      builder: (context, r, _) => _Chip(
+                        icon: r.state == RelayState.online
+                            ? Icons.public_rounded
+                            : Icons.public_off_rounded,
+                        text: switch (r.state) {
+                          RelayState.off => 'Local network only',
+                          RelayState.connecting => 'Connecting to internet…',
+                          RelayState.online => 'Reachable from anywhere',
+                          RelayState.error => 'Internet: ${r.message ?? 'offline'}',
                         },
                       ),
-                      Text(
-                        s.discoverable
-                            ? 'Visible to nearby devices'
-                            : 'Hidden from nearby devices',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: scheme.onPrimaryContainer
-                                .withValues(alpha: 0.8)),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: s.discoverable,
-                  onChanged: (v) =>
-                      store.update((x) => x.copyWith(discoverable: v)),
+                    ),
+                    _Chip(
+                      icon: s.discoverable
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      text: s.discoverable ? 'Visible nearby' : 'Hidden',
+                    ),
+                  ],
                 ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = Theme.of(context).colorScheme.onPrimaryContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: on.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: on),
+          const SizedBox(width: 6),
+          Text(text, style: TextStyle(color: on, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Connect to ID" box: type another device's ID to reach it nearby or
+/// over the internet.
+class _ConnectToId extends StatefulWidget {
+  const _ConnectToId();
+
+  @override
+  State<_ConnectToId> createState() => _ConnectToIdState();
+}
+
+class _ConnectToIdState extends State<_ConnectToId> {
+  final _c = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _go() async {
+    final id = _c.text.replaceAll(' ', '');
+    if (!RegExp(r'^\d{9}$').hasMatch(id)) {
+      setState(() => _error = 'Enter the 9-digit ID');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final peer = await AppScope.of(context).connection.resolveId(id);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      await showPairingSheet(context, peer: peer);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = '$e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _c,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')),
+                    LengthLimitingTextInputFormatter(11),
+                  ],
+                  onSubmitted: (_) => _go(),
+                  onChanged: (_) {
+                    if (_error != null) setState(() => _error = null);
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Connect to ID',
+                    hintText: '123 456 789',
+                    errorText: _error,
+                    errorMaxLines: 3,
+                    prefixIcon: const Icon(Icons.connected_tv_rounded),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: FilledButton(
+                  onPressed: _busy ? null : _go,
+                  style: FilledButton.styleFrom(
+                      minimumSize: const Size(56, 52)),
+                  child: _busy
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5))
+                      : const Text('Connect'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
