@@ -78,7 +78,7 @@ jobs:
           APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
           "$APKSIGNER" sign --ks "$RUNNER_TEMP/release.jks" \
             --ks-pass env:KEYSTORE_PASSWORD --ks-key-alias "$KEY_ALIAS" \
-            --key-pass env:KEY_PASSWORD \
+            --key-pass env:KEY_PASSWORD --v4-signing-enabled false \
             --out ../dist/BeamX-android.apk "$APK"
           "$APKSIGNER" verify --print-certs ../dist/BeamX-android.apk
           rm -f "$RUNNER_TEMP/release.jks"
