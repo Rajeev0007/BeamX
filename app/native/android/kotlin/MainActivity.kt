@@ -68,6 +68,7 @@ class MainActivity : FlutterActivity() {
                         val duration = (call.argument<Int>("duration") ?: 50).toLong()
                         result.success(service?.gesture(points, duration) ?: false)
                     }
+                    "touchCancel" -> result.success(service?.touchCancel() ?: false)
                     "touchDown", "touchMove", "touchUp" -> {
                         val x = call.argument<Double>("x") ?: 0.0
                         val y = call.argument<Double>("y") ?: 0.0

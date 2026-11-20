@@ -282,8 +282,19 @@ class _ConnectSheetState extends State<_ConnectSheet> {
   bool get _canView => widget.peer.platform != 'ios';
   bool get _canShare => ScreenCapture.supported;
 
+  ConnectionService? _connection;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _connection ??= AppScope.of(context).connection;
+  }
+
   @override
   void dispose() {
+    // Closing the sheet while waiting gives up the attempt, so the app
+    // doesn't stay busy or open a stream later.
+    if (_connecting) _connection?.cancelConnect();
     _code.dispose();
     super.dispose();
   }
@@ -311,6 +322,7 @@ class _ConnectSheetState extends State<_ConnectSheet> {
             mode: _mode,
             allowControl: _allowControl,
           );
+      _connecting = false;
       // The app has already opened the streaming screen on top, so remove
       // this sheet's own route rather than popping the top one.
       if (route != null && route.isActive) nav.removeRoute(route);

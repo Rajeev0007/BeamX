@@ -84,13 +84,13 @@ class AndroidInput implements InputInjector {
     }
   }
 
+  /// Lifts a held finger where it is (no swipe to the centre).
   @override
   Future<void> reset() async {
-    if (_down) {
-      _down = false;
-      try {
-        await _touch('touchUp', 0.5, 0.5);
-      } catch (_) {}
-    }
+    if (!_down) return;
+    _down = false;
+    try {
+      await _ch.invokeMethod<bool>('touchCancel');
+    } catch (_) {}
   }
 }

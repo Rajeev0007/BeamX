@@ -210,6 +210,14 @@ class DataLink {
     await _checkControl(force: true);
   }
 
+  /// Sharer: releases held keys, buttons and touches (e.g. while the
+  /// connection is interrupted).
+  Future<void> releaseInput() async {
+    try {
+      await _injector?.reset();
+    } catch (_) {}
+  }
+
   /// Sharer: opens the OS setting that allows BeamX to control this device.
   Future<void> openControlSettings() async =>
       _injector?.openPermissionSettings();

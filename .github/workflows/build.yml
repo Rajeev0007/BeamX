@@ -95,6 +95,15 @@ jobs:
           flutter build apk --release --split-per-abi $(bash tool/version_args.sh)
           cp $OUT/app-release.apk ../unsigned/BeamX-Control-android.apk
           cp $OUT/app-arm64-v8a-release.apk ../unsigned/BeamX-Control-android-arm64.apk
+      - name: Check editions
+        run: |
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
+          if "$AAPT2" dump xmltree ../unsigned/BeamX-android-arm64.apk --file AndroidManifest.xml | grep -q BeamXAccessibilityService; then
+            echo "::error::Main edition contains the accessibility service"; exit 1
+          fi
+          "$AAPT2" dump xmltree ../unsigned/BeamX-Control-android-arm64.apk --file AndroidManifest.xml | grep -q BeamXAccessibilityService \
+            || { echo "::error::Control edition is missing the accessibility service"; exit 1; }
+          echo "Editions checked: main without, Control with the accessibility service"
       - name: Sign with release key
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -125,13 +134,7 @@ jobs:
           done
           rm -f "$RUNNER_TEMP/release.jks"
           # The main edition must not contain the accessibility service.
-          AAPT2="$(dirname "$APKSIGNER")/aapt2"
-          if "$AAPT2" dump xmltree ../dist/BeamX-android-arm64.apk --file AndroidManifest.xml | grep -q BeamXAccessibilityService; then
-            echo "::error::Main edition contains the accessibility service"; exit 1
-          fi
-          "$AAPT2" dump xmltree ../dist/BeamX-Control-android-arm64.apk --file AndroidManifest.xml | grep -q BeamXAccessibilityService \
-            || { echo "::error::Control edition is missing the accessibility service"; exit 1; }
-          echo "Editions checked: main without, Control with the accessibility service"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android

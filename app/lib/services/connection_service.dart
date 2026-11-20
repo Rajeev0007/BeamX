@@ -163,6 +163,18 @@ class ConnectionService {
 
   bool get busy => session.value != null || _handshaking;
 
+  SignalingChannel? _outgoing;
+
+  /// Gives up a connection attempt still waiting for the other device
+  /// (e.g. the connect sheet was closed).
+  void cancelConnect() {
+    final ch = _outgoing;
+    if (ch == null) return;
+    DiagLog.add('connection attempt cancelled');
+    ch.send({'t': 'bye'});
+    ch.close('cancelled');
+  }
+
   Future<void> start() async {
     if (kIsWeb) return;
     if (_relay == null) _startRelay();
@@ -449,6 +461,7 @@ class ConnectionService {
               'same Wi-Fi and BeamX is open on it.');
         }
       }
+      _outgoing = ch;
       try {
         final session = await _handshakeAsClient(ch, peer, code, password, mode,
             allowControl,
@@ -462,6 +475,7 @@ class ConnectionService {
       }
     } finally {
       _handshaking = false;
+      _outgoing = null;
     }
   }
 
