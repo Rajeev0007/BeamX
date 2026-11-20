@@ -25,6 +25,7 @@ site** in your browser menu if you can't find **Settings**.
 | 3 | [Publish a release](#3-publish-a-release) | 2 min | Each new version |
 | 4 | [Free Windows signing](#4-free-windows-signing-signpath) | 15 min + waiting | Removing the SmartScreen warning |
 | 5 | [Android developer verification](#5-android-developer-verification) | 15 min | Installs in 2027 and later |
+| 6 | [Internet server](../server/README.md) (optional) | 30 min | Connecting from anywhere |
 
 ---
 

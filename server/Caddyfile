@@ -1,0 +1,5 @@
+{$DOMAIN} {
+	reverse_proxy /beamx* relay:8080
+	reverse_proxy /health relay:8080
+	respond 404
+}

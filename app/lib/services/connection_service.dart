@@ -8,6 +8,7 @@ import 'beam_session.dart';
 import 'data_link.dart';
 import 'discovery_service.dart';
 import 'pairing_service.dart';
+import 'relay_client.dart';
 import 'screen_capture.dart';
 import 'settings_store.dart';
 import 'signaling.dart';
@@ -71,7 +72,41 @@ class ConnectionService {
   ConnectionService(
       this._settings, this._pairing, this._trust, this._transfers) {
     _port = _settings.value.port;
+    _relayUrl = _settings.value.signalingServer;
     _settings.addListener(_onSettings);
+  }
+
+  RelayClient? _relay;
+  late String _relayUrl;
+
+  /// Internet server connection state (off if no server is set).
+  final ValueNotifier<RelayStatus> relayStatus =
+      ValueNotifier(const RelayStatus(RelayState.off));
+
+  void _startRelay() {
+    _relay?.status.removeListener(_onRelayStatus);
+    _relay?.stop();
+    _relay = null;
+    relayStatus.value = const RelayStatus(RelayState.off);
+    final url = _relayUrl.trim();
+    if (url.isEmpty || kIsWeb) return;
+    final r = RelayClient(
+      url: url,
+      deviceId: _trust.deviceId,
+      key: _trust.relayKey,
+      onIncoming: _onRelayIncoming,
+    );
+    r.status.addListener(_onRelayStatus);
+    _relay = r;
+    r.start();
+  }
+
+  void _onRelayStatus() => relayStatus.value = _relay!.status.value;
+
+  Future<void> _onRelayIncoming(RelayTransport t, String from) async {
+    final ch = SignalingChannel(t);
+    await _hostChannel(ch, 'Internet · ID ${RelayClient.format(from)}',
+        iceServers: _relay?.iceServers ?? const []);
   }
 
   final SettingsStore _settings;
@@ -91,6 +126,7 @@ class ConnectionService {
 
   Future<void> start() async {
     if (kIsWeb) return;
+    if (_relay == null) _startRelay();
     await _server?.close(force: true);
     try {
       final server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
@@ -110,6 +146,11 @@ class ConnectionService {
       _port = port;
       start();
     }
+    final url = _settings.value.signalingServer;
+    if (url != _relayUrl) {
+      _relayUrl = url;
+      _startRelay();
+    }
   }
 
   Future<void> _onRequest(HttpRequest req) async {
@@ -120,9 +161,15 @@ class ConnectionService {
     }
     final ws = await WebSocketTransformer.upgrade(req);
     ws.pingInterval = const Duration(seconds: 5);
-    final ch = SignalingChannel(ws);
+    final ch = SignalingChannel(WebSocketTransport(ws));
     final address = req.connectionInfo?.remoteAddress.address ?? 'unknown';
+    await _hostChannel(ch, address);
+  }
 
+  /// Runs the host side of the handshake on [ch], from the local network or
+  /// the internet relay.
+  Future<void> _hostChannel(SignalingChannel ch, String address,
+      {List<Map<String, dynamic>> iceServers = const []}) async {
     if (busy) {
       ch.send({'t': 'reject', 'reason': 'The device is busy with another session'});
       ch.close('busy');
@@ -130,7 +177,7 @@ class ConnectionService {
     }
     _handshaking = true;
     try {
-      await _handshakeAsHost(ch, address);
+      await _handshakeAsHost(ch, address, iceServers);
     } on SignalingException catch (e) {
       ch.close(e.message);
     } catch (e) {
@@ -150,7 +197,8 @@ class ConnectionService {
     };
   }
 
-  Future<void> _handshakeAsHost(SignalingChannel ch, String address) async {
+  Future<void> _handshakeAsHost(SignalingChannel ch, String address,
+      List<Map<String, dynamic>> iceServers) async {
     final s = _settings.value;
     final nonce = PairingService.newNonce();
     ch.send({
@@ -263,6 +311,7 @@ class ConnectionService {
         expectedPeerId: id,
         trustToSend: trustPayload,
       ),
+      iceServers: iceServers,
     ));
   }
 
@@ -285,15 +334,26 @@ class ConnectionService {
     _handshaking = true;
     try {
       final SignalingChannel ch;
-      try {
-        ch = await SignalingChannel.connect(peer.address, peer.port);
-      } catch (_) {
-        throw SignalingException(
-            'Can\'t reach ${peer.name}. Check that both devices are on the '
-            'same Wi-Fi and BeamX is open on it.');
+      final internetId = peer.internetId;
+      if (internetId != null) {
+        final relay = _relay;
+        if (relay == null) {
+          throw SignalingException(
+              'Set an internet server in Settings → Connection first');
+        }
+        ch = SignalingChannel(await relay.dial(internetId));
+      } else {
+        try {
+          ch = await SignalingChannel.connect(peer.address, peer.port);
+        } catch (_) {
+          throw SignalingException(
+              'Can\'t reach ${peer.name}. Check that both devices are on the '
+              'same Wi-Fi and BeamX is open on it.');
+        }
       }
       try {
-        return await _handshakeAsClient(ch, peer, code, mode, allowControl);
+        return await _handshakeAsClient(ch, peer, code, mode, allowControl,
+            internetId != null ? (_relay?.iceServers ?? const []) : const []);
       } catch (_) {
         ch.close('failed');
         rethrow;
@@ -303,8 +363,13 @@ class ConnectionService {
     }
   }
 
-  Future<BeamSession> _handshakeAsClient(SignalingChannel ch, PeerDevice peer,
-      String? code, StreamMode mode, bool allowControl) async {
+  Future<BeamSession> _handshakeAsClient(
+      SignalingChannel ch,
+      PeerDevice peer,
+      String? code,
+      StreamMode mode,
+      bool allowControl,
+      List<Map<String, dynamic>> iceServers) async {
     final challenge =
         await ch.next('challenge', timeout: const Duration(seconds: 10));
     final nonce = challenge['nonce'];
@@ -361,6 +426,7 @@ class ConnectionService {
         allowControl: allowControl && role == SessionRole.sharer,
         expectedPeerId: hostId,
       ),
+      iceServers: iceServers,
     );
     _begin(session);
     return session;

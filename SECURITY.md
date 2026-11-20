@@ -41,12 +41,17 @@ Only the latest release receives security fixes.
   and special characters, sizes are checked, and partial files are deleted.
 - **Untrusted input:** discovery packets and signaling messages are
   size-limited, strictly validated and sanitised before display.
-- **Local only:** v0.2 connects only within your local network and contacts
-  no outside servers.
+- **Local first:** without an internet server set, BeamX connects only
+  within your local network and contacts no outside servers.
+- **Internet mode (optional):** you choose the server (self-hosted, see
+  `server/README.md`). It relays setup messages and, when needed, encrypted
+  media through TURN. It can't read the stream, and it can't alter the
+  setup messages because they're authenticated with the pairing code or
+  trust key. Each device claims its ID on the server with a secret key.
 
 ### Known limitations (v0.2)
 
-- The signaling connection (port 47800) is not itself encrypted. Someone
+- The local signaling connection (port 47800) is not itself encrypted. Someone
   actively attacking your Wi-Fi network during pairing could capture the
   pairing exchange and try all 1,000,000 codes offline to impersonate a
   device. The approval prompt still has to be accepted. A stronger pairing

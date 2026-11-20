@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../app_scope.dart';
 import '../models/peer_device.dart';
 import '../services/discovery_service.dart';
+import '../services/relay_client.dart';
+import '../services/trust_store.dart';
 import '../widgets/page_header.dart';
 import '../widgets/pressable.dart';
 import '../widgets/radar.dart';
@@ -95,6 +97,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   ),
           ),
         ),
+        const SliverToBoxAdapter(child: _InternetTrusted()),
         ValueListenableBuilder<List<PeerDevice>>(
           valueListenable: scope.discovery.peers,
           builder: (context, peers, _) {
@@ -185,6 +188,25 @@ class _ThisDeviceCard extends StatelessWidget {
                                 FontFeature.tabularFigures()
                               ]),
                         ),
+                      ),
+                      ValueListenableBuilder<RelayStatus>(
+                        valueListenable: AppScope.of(context).connection.relayStatus,
+                        builder: (context, r, _) => switch (r.state) {
+                          RelayState.off => const SizedBox.shrink(),
+                          RelayState.online => Text(
+                              'Internet ID ${RelayClient.format(r.internetId ?? '')}',
+                              style: TextStyle(
+                                  color: scheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.w700)),
+                          RelayState.connecting => Text(
+                              'Connecting to internet server…',
+                              style: TextStyle(color: scheme.onPrimaryContainer)),
+                          RelayState.error => Text(
+                              'Internet: ${r.message ?? 'offline'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: scheme.onPrimaryContainer)),
+                        },
                       ),
                       Text(
                         s.discoverable
@@ -393,6 +415,63 @@ class _AppearInState extends State<_AppearIn> {
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeOutCubic,
         child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Devices that trust this one, reachable over the internet with one tap.
+class _InternetTrusted extends StatelessWidget {
+  const _InternetTrusted();
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<RelayStatus>(
+      valueListenable: scope.connection.relayStatus,
+      builder: (context, relay, _) => ValueListenableBuilder<List<TrustedDevice>>(
+        valueListenable: scope.trust.trustsMe,
+        builder: (context, list, _) {
+          if (relay.state != RelayState.online || list.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    child: Text('Your trusted devices · over the internet',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700, color: scheme.primary)),
+                  ),
+                  for (final d in list)
+                    ListTile(
+                      leading: const Icon(Icons.public_rounded),
+                      title: Text(d.name),
+                      subtitle: Text('Internet ID '
+                          '${RelayClient.format(RelayClient.internetIdFor(d.id))}'),
+                      trailing: const Icon(Icons.arrow_forward_rounded),
+                      onTap: () => showPairingSheet(context,
+                          peer: PeerDevice(
+                            id: d.id,
+                            name: d.name,
+                            platform: d.platform,
+                            address: 'internet',
+                            port: 0,
+                            lastSeen: DateTime.now(),
+                            internetId: RelayClient.internetIdFor(d.id),
+                          )),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

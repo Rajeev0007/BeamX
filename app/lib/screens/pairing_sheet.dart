@@ -9,6 +9,7 @@ import '../app_scope.dart';
 import '../models/peer_device.dart';
 import '../services/connection_service.dart';
 import '../services/discovery_service.dart';
+import '../services/relay_client.dart';
 import '../services/input/input_injector.dart';
 import '../services/screen_capture.dart';
 import '../services/signaling.dart';
@@ -56,11 +57,13 @@ class _MyCodeSheet extends StatefulWidget {
 
 class _MyCodeSheetState extends State<_MyCodeSheet> {
   final _address = TextEditingController();
+  final _internetId = TextEditingController();
   final Future<List<String>> _addresses = _localAddresses();
 
   @override
   void dispose() {
     _address.dispose();
+    _internetId.dispose();
     super.dispose();
   }
 
@@ -139,6 +142,68 @@ class _MyCodeSheetState extends State<_MyCodeSheet> {
             const SizedBox(height: 6),
             Text('Scan with BeamX on a phone, tablet or Mac',
                 style: t.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+            ValueListenableBuilder<RelayStatus>(
+              valueListenable: scope.connection.relayStatus,
+              builder: (context, r, _) => r.state != RelayState.online
+                  ? const SizedBox.shrink()
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Divider(height: 32),
+                        Text('Over the internet',
+                            style: t.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        SelectableText(
+                            'This device\'s Internet ID: '
+                            '${RelayClient.format(r.internetId ?? '')}',
+                            style: TextStyle(color: scheme.onSurfaceVariant)),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _internetId,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(9),
+                          ],
+                          decoration: InputDecoration(
+                            hintText: 'Other device\'s 9-digit Internet ID',
+                            prefixIcon: const Icon(Icons.public_rounded),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonal(
+                            onPressed: () {
+                              final id = _internetId.text;
+                              if (!RegExp(r'^\d{9}$').hasMatch(id)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text('Enter all 9 digits')));
+                                return;
+                              }
+                              final nav = Navigator.of(context);
+                              nav.pop();
+                              showPairingSheet(nav.context,
+                                  peer: PeerDevice(
+                                    id: 'internet-$id',
+                                    name: 'BeamX ${RelayClient.format(id)}',
+                                    platform: 'unknown',
+                                    address: 'internet',
+                                    port: 0,
+                                    lastSeen: DateTime.now(),
+                                    internetId: id,
+                                  ));
+                            },
+                            child: const Text('Continue'),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
             const Divider(height: 32),
             Align(
               alignment: Alignment.centerLeft,
@@ -281,7 +346,10 @@ class _ConnectSheetState extends State<_ConnectSheet> {
                     Text(peer.name,
                         style:
                             t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                    Text('${peer.platformLabel} · ${peer.address}',
+                    Text(
+                        peer.viaInternet
+                            ? 'Over the internet · ID ${RelayClient.format(peer.internetId!)}'
+                            : '${peer.platformLabel} · ${peer.address}',
                         style: TextStyle(color: scheme.onSurfaceVariant)),
                   ],
                 ),

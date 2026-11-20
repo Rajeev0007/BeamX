@@ -151,11 +151,15 @@ final _entries = <_Entry>[
       title: 'Internet server (optional)',
       icon: Icons.public_rounded,
       initial: s.signalingServer,
-      hint: 'wss://your-server.example',
-      validate: (v) => v.isEmpty || v.startsWith('wss://')
-          ? null
-          : 'Must start with wss:// (encrypted)',
-      onSaved: (v) => st.update((x) => x.copyWith(signalingServer: v)),
+      hint: 'wss://1-2-3-4.sslip.io/beamx',
+      validate: (v) {
+        if (v.trim().isEmpty) return null;
+        final u = Uri.tryParse(v.trim());
+        return u != null && u.scheme == 'wss' && u.host.isNotEmpty
+            ? null
+            : 'Must be a wss:// address (encrypted), see server/README.md';
+      },
+      onSaved: (v) => st.update((x) => x.copyWith(signalingServer: v.trim())),
     );
   }),
   _Entry('Connection', 'Auto-connect trusted devices', 'reconnect', (c, st, s) {

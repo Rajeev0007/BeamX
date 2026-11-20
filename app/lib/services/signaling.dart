@@ -4,7 +4,37 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 
-/// A JSON message channel over a WebSocket, used to set up WebRTC.
+/// Carries signaling text messages: a direct WebSocket on the local network,
+/// or a session through the internet relay server.
+abstract class SignalingTransport {
+  /// Incoming messages. Listened to once.
+  Stream<String> get messages;
+  void send(String data);
+  void close(String reason);
+  String? get closeReason;
+}
+
+/// A direct WebSocket between two devices on the same network.
+class WebSocketTransport implements SignalingTransport {
+  WebSocketTransport(this._ws);
+  final WebSocket _ws;
+
+  @override
+  Stream<String> get messages =>
+      _ws.map((d) => d is String ? d : ''); // binary → invalid → closed
+
+  @override
+  void send(String data) => _ws.add(data);
+
+  @override
+  void close(String reason) => _ws.close(WebSocketStatus.normalClosure,
+      reason.length > 100 ? reason.substring(0, 100) : reason);
+
+  @override
+  String? get closeReason => _ws.closeReason;
+}
+
+/// A JSON message channel used to set up WebRTC.
 ///
 /// Messages are buffered in order, so none are lost between the pairing
 /// handshake and the WebRTC session taking over the channel.
@@ -13,9 +43,9 @@ import 'package:async/async.dart';
 /// object with a string `t` (type) field closes the connection.
 class SignalingChannel {
   SignalingChannel(this._ws) {
-    _sub = _ws.listen(
+    _sub = _ws.messages.listen(
       (data) {
-        if (data is! String || data.length > maxMessageBytes) {
+        if (data.length > maxMessageBytes) {
           close('message too large');
           return;
         }
@@ -39,8 +69,8 @@ class SignalingChannel {
   static const maxMessageBytes = 64 * 1024;
   static const protocolVersion = 1;
 
-  final WebSocket _ws;
-  late final StreamSubscription<dynamic> _sub;
+  final SignalingTransport _ws;
+  late final StreamSubscription<String> _sub;
   final _incoming = StreamController<Map<String, dynamic>>();
   late final StreamQueue<Map<String, dynamic>> _queue;
   final _closed = Completer<String>();
@@ -50,7 +80,7 @@ class SignalingChannel {
   bool get isClosed => _closed.isCompleted;
 
   void send(Map<String, Object?> message) {
-    if (!isClosed) _ws.add(jsonEncode(message));
+    if (!isClosed) _ws.send(jsonEncode(message));
   }
 
   /// Reads the next message, which must be of [type]. A `reject` or `bye`
@@ -81,13 +111,12 @@ class SignalingChannel {
     final ws = await WebSocket.connect(uri.toString())
         .timeout(const Duration(seconds: 8));
     ws.pingInterval = const Duration(seconds: 5);
-    return SignalingChannel(ws);
+    return SignalingChannel(WebSocketTransport(ws));
   }
 
   void close([String reason = 'closed']) {
     if (isClosed) return;
-    _ws.close(WebSocketStatus.normalClosure,
-        reason.length > 100 ? reason.substring(0, 100) : reason);
+    _ws.close(reason);
     _finish(reason);
   }
 

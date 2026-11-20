@@ -124,7 +124,11 @@ class BeamSession extends ChangeNotifier {
     required this._code,
     required this._quality,
     required this.link,
+    this.iceServers = const [],
   });
+
+  /// STUN/TURN servers. Empty on the local network (direct connections).
+  final List<Map<String, dynamic>> iceServers;
 
   /// Files, clipboard and trust keys for this session.
   final DataLink link;
@@ -236,8 +240,9 @@ class BeamSession extends ChangeNotifier {
     try {
       await renderer.initialize();
       final pc = await createPeerConnection(<String, dynamic>{
-        // Local network only for now: no STUN/TURN servers are contacted.
-        'iceServers': <Map<String, dynamic>>[],
+        // Local network: none, so no outside server is contacted.
+        // Internet: the relay's STUN and TURN servers.
+        'iceServers': iceServers,
         'sdpSemantics': 'unified-plan',
       });
       _pc = pc;
