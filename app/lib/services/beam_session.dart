@@ -315,6 +315,7 @@ class BeamSession extends ChangeNotifier {
         'sdpSemantics': 'unified-plan',
       });
       _pc = pc;
+      DiagLog.add('step: peer connection created');
 
       pc.onIceCandidate = (c) {
         if (c.candidate == null) return;
@@ -360,6 +361,7 @@ class BeamSession extends ChangeNotifier {
 
       // Messages from the other device can also arrive over the data
       // channel, which keeps working if the setup connection drops.
+      DiagLog.add('step: handlers set');
       link.onSessionMessage = _enqueueMessage;
       _messages = _channel.rest().listen(_enqueueMessage, onDone: _signalingLost);
       unawaited(_channel.closed.then((_) => _signalingLost()));
