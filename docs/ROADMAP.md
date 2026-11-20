@@ -18,7 +18,6 @@
 - [x] iPhone/iPad can view other screens
 - [ ] iPhone/iPad screen sharing (needs a ReplayKit broadcast extension)
 - [x] Choose which monitor to share (asks when there are several)
-- [ ] System audio streaming
 
 ## v0.3: Transfers and trust ✅
 - [x] File transfer in both directions, with accept/decline, over the encrypted channel
@@ -26,7 +25,7 @@
 - [x] Trusted devices: reconnect without a code, remove any time in Settings
 - [x] QR code pairing (scan on Android, iPhone/iPad and Mac)
 
-## v0.4: Remote control (current)
+## v0.4: Remote control ✅
 - [x] Mouse and keyboard control of Windows, macOS and Linux (X11)
 - [x] Touch control of Android: tap, long press, swipe, typing, Back/Home/Recents
 - [x] Control from a phone or tablet: touch as mouse, on-screen keyboard
@@ -35,13 +34,20 @@
 - [ ] Gamepad mode and custom gesture shortcuts
 - [ ] Control of a second monitor (main screen only for now)
 
-## v0.5: Connect anywhere
+## v0.5: Sound (current)
+- [x] Stream the system sound of Windows (WASAPI loopback) and Linux (PulseAudio / PipeWire)
+- [x] Mute button on the viewing device
+- [x] Turn sound off in Settings → Audio
+- [ ] System sound from Android and macOS (needs native audio capture)
+- [ ] Microphone sharing
+
+## v0.6: Connect anywhere
 - [ ] USB connection (Android ADB/tethering)
 - [ ] Hotspot / Wi-Fi Direct
 - [ ] Internet connections via signaling and TURN relay server
 - [ ] Stronger pairing (PAKE) for untrusted networks
 
-## v0.6: Extras
+## v0.7: Extras
 - [ ] Screen recording and screenshots
 - [ ] Phone as webcam, microphone or second monitor
 - [ ] Windows installer, Linux AppImage, Flathub

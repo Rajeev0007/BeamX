@@ -97,6 +97,7 @@ final _entries = <_Entry>[
     return SwitchListTile(
       secondary: const Icon(Icons.volume_up_rounded),
       title: const Text('Stream audio'),
+      subtitle: const Text('Hear the sound of Windows and Linux devices you view'),
       value: s.audioEnabled,
       onChanged: (v) => st.update((x) => x.copyWith(audioEnabled: v)),
     );
@@ -114,8 +115,9 @@ final _entries = <_Entry>[
     return SwitchListTile(
       secondary: const Icon(Icons.mic_rounded),
       title: const Text('Share microphone'),
-      value: s.micSharing,
-      onChanged: (v) => st.update((x) => x.copyWith(micSharing: v)),
+      subtitle: const Text('Coming in a later update'),
+      value: false,
+      onChanged: null,
     );
   }),
 

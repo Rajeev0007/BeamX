@@ -18,7 +18,11 @@ class ScreenCapture {
 
   /// Asks the user for permission (where the OS requires it) and starts
   /// capturing the main screen at up to [fps] frames per second.
-  static Future<MediaStream> start({required int fps}) async {
+  /// Whether this platform can send its system sound while sharing.
+  /// Windows uses WASAPI loopback, Linux uses PulseAudio/PipeWire monitors.
+  static bool get audioSupported => Platform.isWindows || Platform.isLinux;
+
+  static Future<MediaStream> start({required int fps, bool audio = false}) async {
     if (!supported) throw UnsupportedError(unsupportedReason);
 
     if (Platform.isAndroid) {
@@ -59,7 +63,7 @@ class ScreenCapture {
         'deviceId': {'exact': source.id},
         'mandatory': {'frameRate': fps.toDouble()},
       },
-      'audio': false,
+      'audio': audio && audioSupported,
     });
   }
 

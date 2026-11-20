@@ -7,11 +7,11 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.4 (preview).** Live screen sharing and remote control over
+> **Status: v0.5 (preview).** Live screen sharing and remote control over
 > the same Wi-Fi work between Windows, macOS, Linux and Android, and
-> iPhones can view and control. File transfer, shared clipboard, trusted
-> devices and QR pairing work too. Sound, USB and internet connections come
-> next; see the [roadmap](docs/ROADMAP.md).
+> iPhones can view and control. Sound is shared from Windows and Linux.
+> File transfer, shared clipboard, trusted devices and QR pairing work too.
+> USB and internet connections come next; see the [roadmap](docs/ROADMAP.md).
 
 ## Download
 
@@ -63,6 +63,7 @@ time it connects without a code.
 - Live screen sharing in both directions over Wi-Fi, end-to-end encrypted
 - Choose resolution (up to 4K), frame rate (up to 120 FPS), bitrate and
   codec (H.264, H.265, AV1); quality also adapts to the network
+- Sound from shared Windows and Linux screens, with a mute button
 - Live stats: resolution, FPS, bitrate, codec and ping
 - Nearby devices appear automatically on the same Wi-Fi
 - Pair with a one-time 6-digit code, QR code or IP address, and approve

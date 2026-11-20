@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../services/beam_session.dart';
 import '../services/data_link.dart';
 import '../services/input/input_injector.dart';
+import '../services/screen_capture.dart';
 import '../services/settings_store.dart';
 import '../widgets/remote_surface.dart';
 
@@ -202,6 +203,16 @@ class _StreamScreenState extends State<StreamScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white60),
             ),
+            const SizedBox(height: 8),
+            Text(
+              s.sendingAudio
+                  ? '🔊 Your device\'s sound is shared too'
+                  : ScreenCapture.audioSupported
+                      ? '🔇 Sound is not shared (turned off on the viewing device)'
+                      : '🔇 Sharing sound from this device isn\'t supported yet',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60),
+            ),
           ],
         ),
       ),
@@ -242,6 +253,12 @@ class _StreamScreenState extends State<StreamScreen> {
               onTap: () => store.update(
                   (x) => x.copyWith(showStatsOverlay: !x.showStatsOverlay)),
             ),
+            if (!s.isSharer && s.receivingAudio)
+              _ToolButton(
+                icon: s.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                tooltip: s.muted ? 'Unmute sound' : 'Mute sound',
+                onTap: () => s.setMuted(!s.muted),
+              ),
             if (!s.isSharer)
               _ToolButton(
                 icon: Icons.high_quality_rounded,
