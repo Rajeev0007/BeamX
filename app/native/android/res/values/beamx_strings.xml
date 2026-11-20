@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="beamx_accessibility_label">BeamX remote control</string>
+    <string name="beamx_accessibility_description">Lets a computer or phone you connected with BeamX tap, swipe and type on this phone, only while you allow remote control in an active session. BeamX does not read or collect your screen content through this service.</string>
+</resources>

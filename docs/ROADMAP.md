@@ -20,15 +20,20 @@
 - [x] Choose which monitor to share (asks when there are several)
 - [ ] System audio streaming
 
-## v0.3: Transfers and trust ✅ (current)
+## v0.3: Transfers and trust ✅
 - [x] File transfer in both directions, with accept/decline, over the encrypted channel
 - [x] Shared clipboard (text), with direction control in Settings
 - [x] Trusted devices: reconnect without a code, remove any time in Settings
 - [x] QR code pairing (scan on Android, iPhone/iPad and Mac)
 
-## v0.4: Remote control
-- [ ] Mouse, keyboard and touch input to Windows, macOS, Linux and Android
-- [ ] Gesture shortcuts and gamepad mode
+## v0.4: Remote control (current)
+- [x] Mouse and keyboard control of Windows, macOS and Linux (X11)
+- [x] Touch control of Android: tap, long press, swipe, typing, Back/Home/Recents
+- [x] Control from a phone or tablet: touch as mouse, on-screen keyboard
+- [x] Consent: off by default, switchable any time on the shared device
+- [x] Smaller Android APKs per phone type
+- [ ] Gamepad mode and custom gesture shortcuts
+- [ ] Control of a second monitor (main screen only for now)
 
 ## v0.5: Connect anywhere
 - [ ] USB connection (Android ADB/tethering)

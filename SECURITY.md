@@ -28,6 +28,14 @@ Only the latest release receives security fixes.
   256-bit key is sent over the encrypted WebRTC channel (never over the
   unencrypted signaling connection). Removing a device in Settings revokes
   it immediately. Keys are stored in the app's local settings.
+- **Remote control:** off by default. Only the owner of the shared device
+  can turn it on (in the Allow prompt, the connect sheet, or the toolbar)
+  and off again at any time. Input events are validated (coordinates,
+  allowed keys, text length) and ignored while control is off. Held keys
+  and buttons are released when control stops. On Android, the
+  accessibility service acts only on BeamX session commands and reads no
+  screen content. On macOS, BeamX runs outside the App Sandbox because
+  sandboxed apps can't control the Mac.
 - **Files and clipboard:** sent only over the encrypted WebRTC channel.
   Each incoming file needs your approval. File names are stripped of folders
   and special characters, sizes are checked, and partial files are deleted.

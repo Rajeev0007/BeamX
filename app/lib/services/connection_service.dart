@@ -42,13 +42,17 @@ class IncomingRequest {
 
   /// Set by [accept]: let this device connect without a code next time.
   bool trust = false;
+
+  /// Set by [accept]: let the viewer control this device.
+  bool control = false;
   final _decision = Completer<bool>();
 
   /// Completes when the request is accepted, declined or expires.
   Future<bool> get decided => _decision.future;
 
-  void accept({bool trust = false}) {
+  void accept({bool trust = false, bool control = false}) {
     this.trust = trust;
+    this.control = control;
     if (!_decision.isCompleted) _decision.complete(true);
   }
 
@@ -201,6 +205,7 @@ class ConnectionService {
     }
 
     var grantTrust = false;
+    var allowControl = false;
     final skipApproval = usedTrust && s.autoConnectTrusted;
     if (s.requireApproval && !skipApproval) {
       final req = IncomingRequest(
@@ -221,6 +226,7 @@ class ConnectionService {
       pending.value = null;
       if (!ok) _reject(ch, '${s.deviceName} declined the request');
       grantTrust = req.trust && !usedTrust;
+      allowControl = req.control;
     }
 
     // One-time code: the next pairing needs a new one.
@@ -252,6 +258,8 @@ class ConnectionService {
         settings: _settings,
         transfers: _transfers,
         trust: _trust,
+        isSharer: role == SessionRole.sharer,
+        allowControl: allowControl && role == SessionRole.sharer,
         expectedPeerId: id,
         trustToSend: trustPayload,
       ),
@@ -268,6 +276,7 @@ class ConnectionService {
     required PeerDevice peer,
     required String? code,
     required StreamMode mode,
+    bool allowControl = false,
   }) async {
     if (busy) throw SignalingException('Finish the current session first');
     if (mode == StreamMode.share && !ScreenCapture.supported) {
@@ -284,7 +293,7 @@ class ConnectionService {
             'same Wi-Fi and BeamX is open on it.');
       }
       try {
-        return await _handshakeAsClient(ch, peer, code, mode);
+        return await _handshakeAsClient(ch, peer, code, mode, allowControl);
       } catch (_) {
         ch.close('failed');
         rethrow;
@@ -295,7 +304,7 @@ class ConnectionService {
   }
 
   Future<BeamSession> _handshakeAsClient(SignalingChannel ch, PeerDevice peer,
-      String? code, StreamMode mode) async {
+      String? code, StreamMode mode, bool allowControl) async {
     final challenge =
         await ch.next('challenge', timeout: const Duration(seconds: 10));
     final nonce = challenge['nonce'];
@@ -348,6 +357,8 @@ class ConnectionService {
         settings: _settings,
         transfers: _transfers,
         trust: _trust,
+        isSharer: role == SessionRole.sharer,
+        allowControl: allowControl && role == SessionRole.sharer,
         expectedPeerId: hostId,
       ),
     );

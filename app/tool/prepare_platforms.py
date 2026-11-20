@@ -7,6 +7,7 @@ repeatedly. Usage: python3 tool/prepare_platforms.py [platform ...]
 """
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -42,6 +43,23 @@ def android(s: str) -> str:
             s = s.replace(
                 "<application", f'<uses-permission android:name="{p}"/>\n    <application', 1
             )
+    a11y = ".BeamXAccessibilityService"
+    if a11y not in s:
+        s = s.replace(
+            "</application>",
+            f'    <service android:name="{a11y}"\n'
+            '            android:label="@string/beamx_accessibility_label"\n'
+            '            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"\n'
+            '            android:exported="true">\n'
+            "            <intent-filter>\n"
+            '                <action android:name="android.accessibilityservice.AccessibilityService" />\n'
+            "            </intent-filter>\n"
+            '            <meta-data android:name="android.accessibilityservice"\n'
+            '                android:resource="@xml/beamx_accessibility" />\n'
+            "        </service>\n"
+            "    </application>",
+            1,
+        )
     service = "de.julianassmann.flutter_background.IsolateHolderService"
     if service not in s:
         s = s.replace(
@@ -87,7 +105,32 @@ def ios_plist(s: str) -> str:
     return add_plist_keys(s)
 
 
+def copy_android_native() -> None:
+    """Copies BeamX's Kotlin code and resources into the Android project."""
+    src = ROOT / "native/android"
+    main = ROOT / "android/app/src/main"
+    if not main.exists():
+        return
+    for old in list(main.rglob("MainActivity.kt")) + list(main.rglob("MainActivity.java")):
+        old.unlink()
+    pkg = main / "kotlin/io/github/rajeev0007/beamx"
+    pkg.mkdir(parents=True, exist_ok=True)
+    for f in (src / "kotlin").iterdir():
+        shutil.copy(f, pkg / f.name)
+    for sub in ("xml", "values"):
+        (main / "res" / sub).mkdir(parents=True, exist_ok=True)
+        for f in (src / "res" / sub).iterdir():
+            shutil.copy(f, main / "res" / sub / f.name)
+    print("copied Android native code")
+
+
 def mac_entitlements(s: str) -> str:
+    # Controlling the Mac (posting input events) is not possible inside the
+    # App Sandbox. BeamX is distributed outside the App Store, so it runs
+    # unsandboxed like other remote desktop apps.
+    s = re.sub(
+        r"(<key>com\.apple\.security\.app-sandbox</key>\s*)<true/>", r"\1<false/>", s
+    )
     for key in (
         "com.apple.security.network.server",
         "com.apple.security.network.client",
@@ -121,6 +164,7 @@ def main() -> None:
         cwd=ROOT, check=True,
     )
     patch(ROOT / "android/app/src/main/AndroidManifest.xml", android)
+    copy_android_native()
     patch(ROOT / "ios/Runner/Info.plist", ios_plist)
     for f in ("DebugProfile.entitlements", "Release.entitlements"):
         patch(ROOT / "macos/Runner" / f, mac_entitlements)

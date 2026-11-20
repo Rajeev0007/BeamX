@@ -9,6 +9,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/settings.dart';
+import 'discovery_service.dart';
+import 'input/input_injector.dart';
 import 'prompts.dart';
 import 'settings_store.dart';
 import 'transfer_service.dart';
@@ -25,9 +27,29 @@ class DataLink {
     required this._settings,
     required this._transfers,
     required this._trust,
+    required this.isSharer,
+    bool allowControl = false,
     this.expectedPeerId,
     this.trustToSend,
-  });
+  }) : controlAllowed = ValueNotifier(allowControl);
+
+  /// True on the device whose screen is shared (and may be controlled).
+  final bool isSharer;
+
+  /// Sharer: whether the viewer may control this device. Only the owner of
+  /// this device can change it.
+  final ValueNotifier<bool> controlAllowed;
+
+  /// Sharer: what the user must do before control can work, if anything.
+  final ValueNotifier<String?> controlProblem = ValueNotifier(null);
+
+  /// Viewer: whether the other device lets us control it, and its platform.
+  final ValueNotifier<RemoteControlStatus> remote =
+      ValueNotifier(const RemoteControlStatus(allowed: false, platform: ''));
+
+  InputInjector? _injector;
+  bool _injectorReady = false;
+  Timer? _controlTimer;
 
   static const _chunk = 16 * 1024;
   static const _maxBuffered = 1024 * 1024;
@@ -82,6 +104,14 @@ class DataLink {
     ready.value = true;
     final t = trustToSend;
     if (t != null) _sendJson({'t': 'trust', ...t});
+    if (isSharer) {
+      _injector = InputInjector.create();
+      _checkControl();
+      // Re-check, so control starts working right after the user grants
+      // the OS permission.
+      _controlTimer =
+          Timer.periodic(const Duration(seconds: 2), (_) => _checkControl());
+    }
     _clipTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollClipboard());
     _pumpQueue();
   }
@@ -109,6 +139,14 @@ class DataLink {
     switch (m['t']) {
       case 'clip':
         _onClip(m['text']);
+      case 'in' when isSharer:
+        await _onInput(m);
+      case 'control' when !isSharer:
+        final allowed = m['allowed'], platform = m['platform'];
+        remote.value = RemoteControlStatus(
+          allowed: allowed == true,
+          platform: platform is String && platform.length <= 16 ? platform : '',
+        );
       case 'trust':
         _onTrust(m);
       case 'file-offer':
@@ -137,6 +175,56 @@ class DataLink {
       platform: platform.length > 16 ? platform.substring(0, 16) : platform,
       secret: secret,
     );
+  }
+
+  // ---------- Remote control ----------
+
+  /// Sharer: turn remote control of this device on or off.
+  Future<void> setControlAllowed(bool allowed) async {
+    controlAllowed.value = allowed;
+    if (!allowed) await _injector?.reset();
+    await _checkControl(force: true);
+  }
+
+  /// Sharer: opens the OS setting that allows BeamX to control this device.
+  Future<void> openControlSettings() async =>
+      _injector?.openPermissionSettings();
+
+  bool? _lastSentAllowed;
+
+  Future<void> _checkControl({bool force = false}) async {
+    if (!isSharer || _closed || !ready.value) return;
+    final inj = _injector;
+    _injectorReady = inj != null && await inj.isReady();
+    controlProblem.value = !controlAllowed.value
+        ? null
+        : inj == null
+            ? 'This device can\'t be controlled remotely.'
+            : _injectorReady
+                ? null
+                : inj.permissionHelp;
+    final effective = controlAllowed.value && _injectorReady;
+    if (force || effective != _lastSentAllowed) {
+      _lastSentAllowed = effective;
+      await _sendJson({
+        't': 'control',
+        'allowed': effective,
+        'platform': DiscoveryService.platform,
+      });
+    }
+  }
+
+  Future<void> _onInput(Map<dynamic, dynamic> m) async {
+    final inj = _injector;
+    if (!controlAllowed.value || !_injectorReady || inj == null) return;
+    final input = RemoteInput.parse(m);
+    if (input != null) await inj.handle(input);
+  }
+
+  /// Viewer: sends one input event. Ignored unless control is allowed.
+  void sendInput(Map<String, Object> event) {
+    if (isSharer || !remote.value.allowed) return;
+    _sendJson({'t': 'in', ...event});
   }
 
   // ---------- Clipboard ----------
@@ -403,6 +491,8 @@ class DataLink {
     _closed = true;
     ready.value = false;
     _clipTimer?.cancel();
+    _controlTimer?.cancel();
+    await _injector?.reset();
     for (final c in _answers.values) {
       if (!c.isCompleted) c.complete(false);
     }
@@ -425,4 +515,14 @@ class DataLink {
       await _dc?.close();
     } catch (_) {}
   }
+}
+
+/// What the viewer knows about remote control of the sharing device.
+@immutable
+class RemoteControlStatus {
+  const RemoteControlStatus({required this.allowed, required this.platform});
+  final bool allowed;
+
+  /// The sharing device's platform: windows, macos, linux or android.
+  final String platform;
 }

@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../services/connection_service.dart';
+import '../services/input/input_injector.dart';
 
 /// Asks whether to allow another device to connect. Declines automatically
 /// if the request expires or the other device gives up.
@@ -11,6 +12,7 @@ Future<void> showIncomingRequestDialog(
   final viewing = req.mode == StreamMode.view;
   var open = true;
   var trust = false;
+  var control = false;
   // Close the dialog if the request expires or the other device gives up.
   req.decided.then((_) {
     if (open && context.mounted) Navigator.of(context).pop();
@@ -41,6 +43,15 @@ Future<void> showIncomingRequestDialog(
               const SizedBox(height: 8),
               Text('Address: ${req.address}'
                   '${req.alreadyTrusted ? ' · Trusted device' : ''}'),
+              if (viewing && InputInjector.create() != null)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: control,
+                  onChanged: (v) => setState(() => control = v ?? false),
+                  title: const Text('Let them control this device'),
+                  subtitle: const Text(
+                      'Mouse, keyboard or touch. You can turn it off any time.'),
+                ),
               if (!req.alreadyTrusted) ...[
                 const SizedBox(height: 8),
                 CheckboxListTile(
@@ -71,7 +82,7 @@ Future<void> showIncomingRequestDialog(
   );
   open = false;
   if (ok ?? false) {
-    req.accept(trust: trust);
+    req.accept(trust: trust, control: control);
   } else {
     req.decline();
   }

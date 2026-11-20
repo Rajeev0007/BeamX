@@ -7,11 +7,11 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.3 (preview).** Live screen sharing over the same Wi-Fi
-> works between Windows, macOS, Linux and Android, and iPhones can view.
-> File transfer, shared clipboard, trusted devices and QR pairing work too.
-> Remote control, sound, USB and internet connections come next; see the
-> [roadmap](docs/ROADMAP.md).
+> **Status: v0.4 (preview).** Live screen sharing and remote control over
+> the same Wi-Fi work between Windows, macOS, Linux and Android, and
+> iPhones can view and control. File transfer, shared clipboard, trusted
+> devices and QR pairing work too. Sound, USB and internet connections come
+> next; see the [roadmap](docs/ROADMAP.md).
 
 ## Download
 
@@ -23,7 +23,7 @@ Step-by-step instructions for each platform are in the [install guide](docs/INST
 | Windows 10/11 (64-bit) | `BeamX-windows-x64.zip` |
 | macOS | `BeamX-macos.dmg` |
 | Linux (x64) | `BeamX-linux-x64.tar.gz` |
-| Android | `BeamX-android.apk` (preview releases: `BeamX-android-preview.apk`) |
+| Android | `BeamX-android-arm64.apk` (most phones), `BeamX-android-armv7.apk` (older phones) or `BeamX-android.apk` (works on all, larger) |
 | iPhone / iPad | `BeamX-ios-unsigned.ipa` (install with AltStore or SideStore) |
 
 **Repository owner?** See the [setup guide](docs/SETUP.md).
@@ -67,6 +67,8 @@ time it connects without a code.
 - Nearby devices appear automatically on the same Wi-Fi
 - Pair with a one-time 6-digit code, QR code or IP address, and approve
   every connection; trusted devices reconnect without a code
+- Remote control: mouse and keyboard for PCs and Macs, touch for Android,
+  only when the owner of the shared device allows it
 - Send files both ways (up to 4 GB each), with accept/decline on the other side
 - Shared clipboard: copy text on one device, paste on the other
 - Pick which monitor to share on multi-screen PCs

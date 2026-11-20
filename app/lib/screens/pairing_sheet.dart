@@ -9,6 +9,7 @@ import '../app_scope.dart';
 import '../models/peer_device.dart';
 import '../services/connection_service.dart';
 import '../services/discovery_service.dart';
+import '../services/input/input_injector.dart';
 import '../services/screen_capture.dart';
 import '../services/signaling.dart';
 
@@ -205,6 +206,7 @@ class _ConnectSheetState extends State<_ConnectSheet> {
       _canView ? StreamMode.view : StreamMode.share;
   late final _code = TextEditingController(text: widget.initialCode);
   bool _connecting = false;
+  bool _allowControl = false;
   String? _error;
 
   /// The other device trusts this one, so no code is needed.
@@ -235,6 +237,7 @@ class _ConnectSheetState extends State<_ConnectSheet> {
             peer: widget.peer,
             code: _trusted ? null : _code.text,
             mode: _mode,
+            allowControl: _allowControl,
           );
       // The app has already opened the streaming screen on top, so remove
       // this sheet's own route rather than popping the top one.
@@ -315,6 +318,16 @@ class _ConnectSheetState extends State<_ConnectSheet> {
               style: t.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
+          if (_mode == StreamMode.share && InputInjector.create() != null)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _allowControl,
+              onChanged: _connecting
+                  ? null
+                  : (v) => setState(() => _allowControl = v ?? false),
+              title: const Text('Let them control my screen'),
+              subtitle: const Text('You can turn it off any time.'),
+            ),
           const SizedBox(height: 20),
           if (_trusted) ...[
             ListTile(
