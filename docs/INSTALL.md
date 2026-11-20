@@ -78,6 +78,16 @@ When BeamX asks to find devices on your local network, tap **Allow**.
   **Pair** and connect by address, or connect from the iPhone by typing the
   other device's IP address.
 
+## Where received files go
+
+| Device | Folder |
+|---|---|
+| Windows / macOS / Linux | `Downloads/BeamX` |
+| Android | `Download/BeamX` (open with the Files app) |
+| iPhone / iPad | Files app → **On My iPhone → BeamX** |
+
+The path of each file is also shown on the **Transfers** screen.
+
 ## Verify your download
 
 Every release file was built by GitHub Actions from this repository's code.

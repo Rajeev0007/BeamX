@@ -24,6 +24,13 @@ Only the latest release receives security fixes.
   pairing code, so another device can't swap them.
 - **Consent:** sharing your screen always shows a visible indicator that
   cannot be turned off, and on Android a system notification too.
+- **Trusted devices:** when you tick "Trust this device", a new random
+  256-bit key is sent over the encrypted WebRTC channel (never over the
+  unencrypted signaling connection). Removing a device in Settings revokes
+  it immediately. Keys are stored in the app's local settings.
+- **Files and clipboard:** sent only over the encrypted WebRTC channel.
+  Each incoming file needs your approval. File names are stripped of folders
+  and special characters, sizes are checked, and partial files are deleted.
 - **Untrusted input:** discovery packets and signaling messages are
   size-limited, strictly validated and sanitised before display.
 - **Local only:** v0.2 connects only within your local network and contacts

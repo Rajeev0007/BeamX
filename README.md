@@ -7,8 +7,9 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.2 (preview).** Live screen sharing over the same Wi-Fi
+> **Status: v0.3 (preview).** Live screen sharing over the same Wi-Fi
 > works between Windows, macOS, Linux and Android, and iPhones can view.
+> File transfer, shared clipboard, trusted devices and QR pairing work too.
 > Remote control, sound, USB and internet connections come next; see the
 > [roadmap](docs/ROADMAP.md).
 
@@ -49,10 +50,13 @@ See [SECURITY.md](SECURITY.md) for how to report a problem.
 2. On the first device, tap the other device in the list (or tap **Pair →
    Connect by address** and type its IP).
 3. Choose **View their screen** or **Share mine**.
-4. Type the **pairing code** shown on the other device's Devices screen.
+4. Type the **pairing code** shown on the other device's Devices screen,
+   or scan its QR code (Devices → Pair) with the scan button.
 5. Tap **Allow** on the other device. The stream starts.
 
-Tap the screen to show the toolbar: disconnect, live stats and quality.
+Tap the screen to show the toolbar: disconnect, send files, live stats and
+quality. Tick **Trust this device** when allowing a connection, and next
+time it connects without a code.
 
 ## Features
 
@@ -61,7 +65,11 @@ Tap the screen to show the toolbar: disconnect, live stats and quality.
   codec (H.264, H.265, AV1); quality also adapts to the network
 - Live stats: resolution, FPS, bitrate, codec and ping
 - Nearby devices appear automatically on the same Wi-Fi
-- Pair with a one-time 6-digit code or IP address, and approve every connection
+- Pair with a one-time 6-digit code, QR code or IP address, and approve
+  every connection; trusted devices reconnect without a code
+- Send files both ways (up to 4 GB each), with accept/decline on the other side
+- Shared clipboard: copy text on one device, paste on the other
+- Pick which monitor to share on multi-screen PCs
 - Profiles: Battery Saver, Balanced, High Quality, Gaming, Movies
 - Every setting is adjustable: resolution up to 4K, 30–120 FPS, bitrate,
   codec (H.264, H.265, AV1), audio, connection type, controls, theme and colours
