@@ -10,6 +10,7 @@ class PeerDevice {
     required this.address,
     required this.port,
     required this.lastSeen,
+    this.internetId,
   });
 
   final String id;
@@ -18,6 +19,10 @@ class PeerDevice {
   final String address;
   final int port;
   final DateTime lastSeen;
+
+  /// Set when connecting through the internet server instead of directly.
+  final String? internetId;
+  bool get viaInternet => internetId != null;
 
   IconData get icon => switch (platform) {
         'android' => Icons.phone_android_rounded,

@@ -7,12 +7,13 @@ Fast, secure screen sharing and remote control between all your devices:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> **Status: v0.6 (preview).** Live screen sharing and remote control over
+> **Status: v0.7 (preview).** Live screen sharing and remote control over
 > the same Wi-Fi work between Windows, macOS, Linux and Android, and
 > iPhones can view and control. Sound is shared from Windows and Linux.
 > File transfer, clipboard, trusted devices, QR pairing, screenshots,
-> recording and USB/hotspot connections work too. Internet connections come
-> next; see the [roadmap](docs/ROADMAP.md).
+> recording, USB/hotspot and internet connections (with your own free
+> server, see [server/README.md](server/README.md)) work too. See the
+> [roadmap](docs/ROADMAP.md).
 
 ## Download
 
@@ -66,7 +67,8 @@ time it connects without a code.
   codec (H.264, H.265, AV1); quality also adapts to the network
 - Sound from shared Windows and Linux screens, with a mute button
 - Screenshots and recording of the stream
-- Works over Wi-Fi, a phone hotspot or a USB cable (Android tethering)
+- Works over Wi-Fi, a phone hotspot, a USB cable (Android tethering) or the
+  internet, through a server you host yourself ([guide](server/README.md))
 - Live stats: resolution, FPS, bitrate, codec and ping
 - Nearby devices appear automatically on the same Wi-Fi
 - Pair with a one-time 6-digit code, QR code or IP address, and approve
@@ -87,6 +89,7 @@ time it connects without a code.
 
 ```
 app/                Flutter app (one codebase for all 5 platforms)
+server/             Internet relay server (Node.js, no dependencies) + Docker setup
   lib/models/       Settings, profiles, devices
   lib/services/     Settings, discovery, pairing, signaling, WebRTC sessions
   lib/screens/      Devices, pairing, streaming, transfers, profiles, settings

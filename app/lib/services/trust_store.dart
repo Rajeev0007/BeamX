@@ -53,18 +53,26 @@ class TrustedDevice {
 /// - [trustedByMe]: devices that may connect to me without a code.
 /// - keys other devices gave me, so I can connect to them without a code.
 class TrustStore {
-  TrustStore._(this._prefs, this.deviceId, this._mine, this._theirs)
-      : trustedByMe = ValueNotifier(List.unmodifiable(_mine.values));
+  TrustStore._(this._prefs, this.deviceId, this.relayKey, this._mine, this._theirs)
+      : trustedByMe = ValueNotifier(List.unmodifiable(_mine.values)),
+        trustsMe = ValueNotifier(List.unmodifiable(_theirs.values));
 
   static const _idKey = 'beamx.deviceId';
+  static const _relayKeyKey = 'beamx.relayKey';
   static const _mineKey = 'beamx.trustedByMe';
   static const _theirsKey = 'beamx.trustedMe';
 
   final SharedPreferences _prefs;
   final String deviceId;
+
+  /// Proves to internet relay servers that this device owns [deviceId].
+  final String relayKey;
   final Map<String, TrustedDevice> _mine;
   final Map<String, TrustedDevice> _theirs;
   final ValueNotifier<List<TrustedDevice>> trustedByMe;
+
+  /// Devices that let this device connect to them without a code.
+  final ValueNotifier<List<TrustedDevice>> trustsMe;
 
   static Future<TrustStore> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -73,7 +81,13 @@ class TrustStore {
       id = randomHex(16);
       await prefs.setString(_idKey, id);
     }
-    return TrustStore._(prefs, id, _read(prefs, _mineKey), _read(prefs, _theirsKey));
+    var relayKey = prefs.getString(_relayKeyKey);
+    if (relayKey == null || relayKey.length != 64) {
+      relayKey = randomHex(32);
+      await prefs.setString(_relayKeyKey, relayKey);
+    }
+    return TrustStore._(
+        prefs, id, relayKey, _read(prefs, _mineKey), _read(prefs, _theirsKey));
   }
 
   static Map<String, TrustedDevice> _read(SharedPreferences p, String key) {
@@ -96,6 +110,7 @@ class TrustStore {
     _prefs.setString(
         _theirsKey, jsonEncode([for (final d in _theirs.values) d.toJson()]));
     trustedByMe.value = List.unmodifiable(_mine.values);
+    trustsMe.value = List.unmodifiable(_theirs.values);
   }
 
   /// Key to check when device [id] connects without a code.

@@ -41,16 +41,19 @@
 - [ ] System sound from Android and macOS (needs native audio capture)
 - [ ] Microphone sharing
 
-## v0.6: Extras (current)
+## v0.6: Extras ✅
 - [x] Screenshots of the stream on every platform
 - [x] Recording the stream to MP4 on Android, iPhone/iPad and Mac
 - [x] Windows installer with Start menu entry and firewall rule
 - [x] Linux .deb package
 - [x] Phone hotspot and USB tethering connections, with discovery on every network
 
-## v0.7: Connect anywhere
-- [ ] Internet connections via signaling and TURN relay server
-- [ ] Stronger pairing (PAKE) for untrusted networks
+## v0.7: Connect anywhere (current)
+- [x] Self-hostable internet server: relay + TURN + automatic HTTPS (server/)
+- [x] 9-digit Internet ID, connect from anywhere with ID + pairing code
+- [x] One-tap internet connect to trusted devices
+- [x] Server tests in CI
+- [ ] Stronger pairing (PAKE) against active attackers
 
 ## Later
 - [ ] Recording on Windows and Linux
