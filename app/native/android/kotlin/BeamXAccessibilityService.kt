@@ -70,6 +70,114 @@ class BeamXAccessibilityService : AccessibilityService() {
         return dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
     }
 
+    // ---------- Live touch (Android 8+) ----------
+    // A finger that stays down between events: each move continues the same
+    // stroke, so drags and swipes follow the remote pointer in real time
+    // instead of playing back after release.
+
+    private var stroke: GestureDescription.StrokeDescription? = null
+    private var lastX = 0f
+    private var lastY = 0f
+    private var lastTime = 0L
+    private var busy = false
+    private var fallbackPoints = ArrayList<Double>()
+    private var fallbackStart = 0L
+    private val queue = ArrayDeque<Triple<Float, Float, Boolean>>() // x, y, isUp
+
+    private fun toScreen(x: Double, y: Double): Pair<Float, Float> {
+        val (w, h) = screenSize()
+        return Pair((x * w).toFloat(), (y * h).toFloat())
+    }
+
+    private val callback = object : AccessibilityService.GestureResultCallback() {
+        override fun onCompleted(gestureDescription: GestureDescription?) {
+            busy = false
+            drain()
+        }
+
+        override fun onCancelled(gestureDescription: GestureDescription?) {
+            busy = false
+            stroke = null // the chain broke; the next move starts a new touch
+            drain()
+        }
+    }
+
+    private fun dispatch(s: GestureDescription.StrokeDescription): Boolean {
+        busy = true
+        val ok = dispatchGesture(GestureDescription.Builder().addStroke(s).build(), callback, null)
+        if (!ok) busy = false
+        return ok
+    }
+
+    fun touchDown(x: Double, y: Double): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            fallbackPoints = arrayListOf(x, y)
+            fallbackStart = System.currentTimeMillis()
+            return true
+        }
+        queue.clear()
+        val (sx, sy) = toScreen(x, y)
+        val path = Path().apply { moveTo(sx, sy) }
+        val s = GestureDescription.StrokeDescription(path, 0L, 1L, true)
+        stroke = s
+        lastX = sx
+        lastY = sy
+        lastTime = System.currentTimeMillis()
+        return dispatch(s)
+    }
+
+    fun touchMove(x: Double, y: Double): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            if (fallbackPoints.size < 4000) fallbackPoints.addAll(listOf(x, y))
+            return true
+        }
+        val (sx, sy) = toScreen(x, y)
+        queue.addLast(Triple(sx, sy, false))
+        drain()
+        return true
+    }
+
+    fun touchUp(x: Double, y: Double): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            fallbackPoints.addAll(listOf(x, y))
+            val ms = (System.currentTimeMillis() - fallbackStart).coerceIn(1L, 59000L)
+            return gesture(fallbackPoints, ms)
+        }
+        val (sx, sy) = toScreen(x, y)
+        queue.addLast(Triple(sx, sy, true))
+        drain()
+        return true
+    }
+
+    private fun drain() {
+        if (busy || queue.isEmpty()) return
+        val prev = stroke
+        // Merge everything queued up to (and including) a finger lift into
+        // one path, so a slow device never falls behind the pointer.
+        val path = Path().apply { moveTo(lastX, lastY) }
+        var up = false
+        while (queue.isNotEmpty() && !up) {
+            val (x, y, isUp) = queue.removeFirst()
+            if (x != lastX || y != lastY) path.lineTo(x, y)
+            lastX = x
+            lastY = y
+            up = isUp
+        }
+        val now = System.currentTimeMillis()
+        val duration = (now - lastTime).coerceIn(1L, 250L)
+        lastTime = now
+        val next = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && prev != null) {
+            try {
+                prev.continueStroke(path, 0L, duration, !up)
+            } catch (e: IllegalStateException) {
+                null
+            }
+        } else null
+        val s = next ?: GestureDescription.StrokeDescription(path, 0L, duration, !up)
+        stroke = if (up) null else s
+        dispatch(s)
+    }
+
     fun global(action: String): Boolean = when (action) {
         "back" -> performGlobalAction(GLOBAL_ACTION_BACK)
         "home" -> performGlobalAction(GLOBAL_ACTION_HOME)

@@ -76,6 +76,15 @@ class DataLink {
   final Map<String, Object>? trustToSend;
 
   RTCDataChannel? _dc;
+
+  /// Separate channel for mouse/touch/keys, so input never waits behind a
+  /// file transfer on the main channel.
+  RTCDataChannel? _inputDc;
+
+  void attachInput(RTCDataChannel dc) {
+    _inputDc = dc;
+    dc.onMessage = _onMessage;
+  }
   final ValueNotifier<bool> ready = ValueNotifier(false);
   bool _closed = false;
 
@@ -239,7 +248,12 @@ class DataLink {
   /// Viewer: sends one input event. Ignored unless control is allowed.
   void sendInput(Map<String, Object> event) {
     if (isSharer || !remote.value.allowed) return;
-    _sendJson({'t': 'in', ...event});
+    final input = _inputDc;
+    if (input != null && input.state == RTCDataChannelState.RTCDataChannelOpen) {
+      input.send(RTCDataChannelMessage(jsonEncode({'t': 'in', ...event})));
+    } else {
+      _sendJson({'t': 'in', ...event});
+    }
   }
 
   // ---------- Clipboard ----------
@@ -500,6 +514,7 @@ class DataLink {
     await _failIncoming('Disconnected');
     try {
       await _dc?.close();
+      await _inputDc?.close();
     } catch (_) {}
   }
 }

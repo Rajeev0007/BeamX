@@ -48,6 +48,9 @@ Future<void> _setPassword(BuildContext c, SettingsStore st) async {
   }
 }
 
+/// Set by the release build (--dart-define=BEAMX_VERSION=…).
+const beamxVersion = String.fromEnvironment('BEAMX_VERSION', defaultValue: 'dev');
+
 final _entries = <_Entry>[
   // Streaming
   _Entry('Streaming', 'Resolution', 'quality hd 4k 1080 720', (c, st, s) {
@@ -428,6 +431,27 @@ final _entries = <_Entry>[
   }),
 
   // Reset
+  _Entry('About', 'About BeamX', 'version licence license copyright rajeev development', (c, st, s) {
+    return ListTile(
+      leading: const Icon(Icons.info_outline_rounded),
+      title: const Text('About BeamX'),
+      subtitle: const Text('Version $beamxVersion · © 2026 Rajeev Development'),
+      onTap: () => showAboutDialog(
+        context: c,
+        applicationName: 'BeamX',
+        applicationVersion: beamxVersion,
+        applicationIcon: const Icon(Icons.cast_rounded, size: 40),
+        applicationLegalese: '© 2026 Rajeev Development.\n'
+            'Free and open source under the GNU GPL v3. "BeamX" is a name of '
+            'Rajeev Development.',
+        children: const [
+          SizedBox(height: 16),
+          SelectableText('Official downloads and source code:\n'
+              'https://github.com/Rajeev0007/BeamX'),
+        ],
+      ),
+    );
+  }),
   _Entry('About', 'Copy diagnostics log', 'bug report log debug problem', (c, st, s) {
     return ListTile(
       leading: const Icon(Icons.bug_report_rounded),

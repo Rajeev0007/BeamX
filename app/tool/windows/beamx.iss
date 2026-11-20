@@ -8,7 +8,11 @@
 AppId={{7E1B0C2A-4F3B-4C8E-9A51-B2E1D0F3BEA7}
 AppName=BeamX
 AppVersion={#AppVersion}
-AppPublisher=Rajeev0007
+AppPublisher=Rajeev Development
+AppCopyright=(C) 2026 Rajeev Development
+VersionInfoCompany=Rajeev Development
+VersionInfoCopyright=(C) 2026 Rajeev Development
+VersionInfoProductName=BeamX
 AppPublisherURL=https://github.com/Rajeev0007/BeamX
 AppSupportURL=https://github.com/Rajeev0007/BeamX/issues
 DefaultDirName={autopf}\BeamX

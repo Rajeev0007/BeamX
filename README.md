@@ -1,128 +1,113 @@
 # BeamX
 
-Fast, secure screen sharing and remote control between all your devices:
-**Windows, macOS, Linux, Android and iOS**. Free and open source.
+**Screen sharing and remote control between all your devices:**
+Windows, macOS, Linux, Android and iPhone/iPad. Free, open source and
+end-to-end encrypted. By **Rajeev Development**.
 
 [![Build](https://github.com/Rajeev0007/BeamX/actions/workflows/build.yml/badge.svg)](https://github.com/Rajeev0007/BeamX/actions/workflows/build.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Rajeev0007/BeamX/badge)](https://scorecard.dev/viewer/?uri=github.com/Rajeev0007/BeamX)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-
-> **Status: v0.10 (preview).** Live screen sharing and remote control over
-> the same Wi-Fi work between Windows, macOS, Linux and Android, and
-> iPhones can view and control. Sound is shared from Windows and Linux.
-> File transfer, clipboard, trusted devices, QR pairing, screenshots,
-> recording, USB/hotspot and internet connections (with your own free
-> server, see [server/README.md](server/README.md)) work too. See the
-> [roadmap](docs/ROADMAP.md).
+[![Latest release](https://img.shields.io/github/v/release/Rajeev0007/BeamX)](https://github.com/Rajeev0007/BeamX/releases/latest)
 
 ## Download
 
-Get the latest version from [Releases](https://github.com/Rajeev0007/BeamX/releases).
-Step-by-step instructions for each platform are in the [install guide](docs/INSTALL.md).
+**[⬇ Latest release](https://github.com/Rajeev0007/BeamX/releases/latest)**.
+Step-by-step help for each device: **[install guide](docs/INSTALL.md)**.
 
-| Platform | File |
+| Device | File |
 |---|---|
-| Windows 10/11 (64-bit) | `BeamX-windows-setup.exe` (installer) or `BeamX-windows-x64.zip` (portable) |
-| macOS | `BeamX-macos.dmg` |
-| Linux (x64) | `BeamX-linux-amd64.deb` (Ubuntu/Debian) or `BeamX-linux-x64.tar.gz` |
-| Android | `BeamX-android-arm64.apk` (most phones), `BeamX-android-armv7.apk` (older phones) or `BeamX-android.apk` (works on all, larger) |
-| iPhone / iPad | `BeamX-ios-unsigned.ipa` (install with AltStore or SideStore) |
+| **Windows** 10/11 | `BeamX-windows-setup.exe` (installer) · `BeamX-windows-x64.zip` (portable) |
+| **macOS** | `BeamX-macos.dmg` |
+| **Linux** | `BeamX-linux-amd64.deb` (Ubuntu, Debian, Mint) · `BeamX-linux-x64.tar.gz` |
+| **Android** | `BeamX-android-arm64.apk` (most phones) · `BeamX-android-armv7.apk` (older phones) · `BeamX-android.apk` (any phone, larger) |
+| **Android, to be controlled remotely** | `BeamX-Control-android-arm64.apk` (see [why there are two editions](docs/INSTALL.md#two-android-editions)) |
+| **iPhone / iPad** | `BeamX-ios-unsigned.ipa` (install with AltStore or SideStore) |
 
-**Repository owner?** See the [setup guide](docs/SETUP.md).
+## What it does
+
+- **Share your screen** to any of your devices, or view theirs, in sharp
+  quality: up to 4K, up to 120 FPS, H.264 / H.265 / AV1, adapting to your
+  network automatically
+- **Remote control:** mouse and keyboard for PCs and Macs, touch for Android,
+  with touch gestures, an on-screen keyboard, a **media remote** and a
+  **gamepad** when controlling from a phone
+- **Sound** from Windows and Linux; **your microphone** to the other device
+- **Files** both ways (drag and drop on computers), **shared clipboard**,
+  **screenshots** and **recording**
+- **Connect from anywhere** with the device's **ID + your password**, like
+  AnyDesk, with no setup, or through **your own server** for the best
+  reliability ([guide](server/README.md))
+- Works over **Wi-Fi, a phone hotspot or a USB cable** too
+- Every setting adjustable, saved **profiles**, light/dark themes and layouts
+  for phones, tablets and desktops
+
+## Quick start
+
+**Same Wi-Fi, one-time code:**
+1. Open BeamX on both devices.
+2. On one, tap the other device in the list, choose **View their screen**
+   or **Share mine**, and type the code shown on the other device.
+3. Tap **Allow** on the other device.
+
+**From anywhere, ID + password:**
+1. On the device you want to reach: **Settings → Access from anywhere →**
+   turn on **Connect from anywhere** and **Allow connecting with a
+   password**, and set a password.
+2. On your other device: type its **ID** in **Connect to ID**, then the
+   password.
 
 ## Is it safe?
 
-- **Open source.** Every line of code is public in this repository.
-- **Built by GitHub, not on a personal PC.** Every release file is built by
-  [GitHub Actions](.github/workflows/build.yml) from the public code.
-- **Verifiable.** Each release includes `SHA256SUMS.txt` and a signed build
-  attestation. Check any file with:
-  ```
-  gh attestation verify BeamX-android.apk --repo Rajeev0007/BeamX
-  ```
+- **End-to-end encrypted** video, sound, files and input (WebRTC DTLS-SRTP).
+- **You decide who connects:** one-time codes, an Allow prompt, trusted
+  devices, or your own password (never stored or sent; locks after 5 wrong
+  tries). Hidden devices aren't listed anywhere.
+- **Remote control is off** until the owner of the shared device turns it on,
+  and a red "Your screen is being shared" banner is always visible.
 - **No ads, no tracking, no data collection.**
-- **You stay in control.** Nothing connects without a pairing code, and a
-  red "Your screen is being shared" banner is always visible while sharing.
+- **Open source and verifiable:** every release is built by GitHub Actions
+  from this code, with SHA-256 checksums and signed build attestations:
+  ```
+  gh attestation verify BeamX-android-arm64.apk --repo Rajeev0007/BeamX
+  ```
 
-See [SECURITY.md](SECURITY.md) for how to report a problem.
+Details and how to report a problem: [SECURITY.md](SECURITY.md).
 
-## How to use
+## Known limits
 
-**With ID and password (like AnyDesk):**
-1. On the device you want to reach, open **Settings → Access from anywhere**,
-   turn on **Allow connecting with a password** and set a password.
-   To reach it from other networks, also turn on **Connect from anywhere**
-   (no setup needed). Hide it from nearby lists with the switch on the main
-   screen.
-2. Note its **Your ID** from the main screen.
-3. On the other device, type that ID in **Connect to ID**, choose
-   **View their screen**, enter the password and tap **Connect**.
+- iPhone/iPad can view and control other devices but can't share its own
+  screen yet, and Apple doesn't allow controlling an iPhone remotely.
+- Sound sharing works from Windows and Linux; Android and Mac send video only.
+- Recording works on Android, iPhone/iPad and Mac.
+- Linux screen sharing and remote control need an X11 session.
 
-**With a one-time code (nobody needs a password):**
-1. Open BeamX on both devices, connected to the **same Wi-Fi**.
-2. On the first device, tap the other device in the list (or tap **Pair →
-   Connect by address** and type its IP).
-3. Choose **View their screen** or **Share mine**.
-4. Type the **pairing code** shown on the other device's Devices screen,
-   or scan its QR code (Devices → Pair) with the scan button.
-5. Tap **Allow** on the other device. The stream starts.
+Planned work: [roadmap](docs/ROADMAP.md).
 
-Tap the screen to show the toolbar: disconnect, send files, live stats and
-quality. Tick **Trust this device** when allowing a connection, and next
-time it connects without a code.
-
-## Features
-
-- Live screen sharing in both directions over Wi-Fi, end-to-end encrypted
-- Choose resolution (up to 4K), frame rate (up to 120 FPS), bitrate and
-  codec (H.264, H.265, AV1); quality also adapts to the network
-- Sound from shared Windows and Linux screens, with a mute button
-- Screenshots and recording of the stream
-- Works over Wi-Fi, a phone hotspot, a USB cable (Android tethering) or the
-  internet: no setup with the free public server, or through your own server
-  for the best reliability ([guide](server/README.md))
-- Live stats: resolution, FPS, bitrate, codec and ping
-- Nearby devices appear automatically on the same Wi-Fi
-- Pair with a one-time 6-digit code, QR code or IP address, and approve
-  every connection; trusted devices reconnect without a code
-- Remote control: mouse and keyboard for PCs and Macs, touch for Android,
-  only when the owner of the shared device allows it
-- Media remote, touch gestures and an on-screen gamepad when controlling
-- Microphone sharing from the viewing device
-- Send files both ways (up to 4 GB each), including drag and drop, with accept/decline on the other side
-- Shared clipboard: copy text on one device, paste on the other
-- Pick which monitor to share on multi-screen PCs
-- Profiles: Battery Saver, Balanced, High Quality, Gaming, Movies
-- Every setting is adjustable: resolution up to 4K, 30–120 FPS, bitrate,
-  codec (H.264, H.265, AV1), audio, connection type, controls, theme and colours
-- Searchable settings, plus export and import
-- Light and dark themes, six accent colours, and layouts for phones,
-  tablets and desktops
-
-## Project layout
+## For developers
 
 ```
 app/                Flutter app (one codebase for all 5 platforms)
-server/             Internet relay server (Node.js, no dependencies) + Docker setup
-  lib/models/       Settings, profiles, devices
-  lib/services/     Settings, discovery, pairing, signaling, WebRTC sessions
-  lib/screens/      Devices, pairing, streaming, transfers, profiles, settings
-  tool/             Generates and configures native platform folders
-.github/workflows/  Builds, releases, security scorecard
+  lib/services/     Connections, WebRTC sessions, pairing, input, transfers
+  lib/screens/      Devices, streaming, transfers, profiles, settings
+  native/android/   Accessibility service for remote control (Kotlin)
+  tool/             Platform setup, installers, version numbers
+server/             Optional internet server (Node.js, no dependencies)
+.github/workflows/  Builds, releases, tests, security scorecard
 docs/               Install guide, owner setup guide, roadmap
 ```
 
-## Build it yourself
-
-Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install) (stable channel).
-
+Build it yourself with the [Flutter SDK](https://docs.flutter.dev/get-started/install) (stable):
 ```
 cd app
-python3 tool/prepare_platforms.py   # creates android/, ios/, windows/ ...
+python3 tool/prepare_platforms.py
 flutter run
 ```
 
-## License
+Repository owner: see the [setup guide](docs/SETUP.md).
 
-[GPL-3.0](LICENSE). You may use, study, change and share BeamX. Shared
-changes must stay open source under the same licence.
+## Licence
+
+Copyright © 2026 **Rajeev Development**. BeamX is free software under the
+[GNU GPL v3](LICENSE): you may use, study, share and change it, and shared
+changes must stay open source under the same licence. "BeamX" is a name of
+Rajeev Development; see [NOTICE](NOTICE) for use of the name in forks.

@@ -1,7 +1,11 @@
 package io.github.rajeev0007.beamx
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.os.Bundle
 import android.media.AudioManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -12,6 +16,33 @@ import io.flutter.plugin.common.MethodChannel
 
 /** Connects the Dart remote-control code to BeamXAccessibilityService. */
 class MainActivity : FlutterActivity() {
+    private var multicastLock: WifiManager.MulticastLock? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Many phones drop incoming broadcast packets unless an app holds
+        // this lock, so nearby PCs never appeared in the device list.
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifi.createMulticastLock("beamx-discovery").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    override fun onDestroy() {
+        multicastLock?.let { if (it.isHeld) it.release() }
+        super.onDestroy()
+    }
+
+    /** True in the Control edition, which declares the accessibility service. */
+    private fun isControlEdition(): Boolean = try {
+        packageManager.getServiceInfo(
+            ComponentName(this, BeamXAccessibilityService::class.java), 0)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "beamx/input")
@@ -19,6 +50,13 @@ class MainActivity : FlutterActivity() {
                 val service = BeamXAccessibilityService.instance
                 when (call.method) {
                     "isEnabled" -> result.success(service != null)
+                    "isControlEdition" -> result.success(isControlEdition())
+                    "openReleases" -> {
+                        startActivity(Intent(Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/Rajeev0007/BeamX/releases/latest"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        result.success(null)
+                    }
                     "openSettings" -> {
                         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -29,6 +67,15 @@ class MainActivity : FlutterActivity() {
                         val points = call.argument<List<Double>>("points") ?: emptyList()
                         val duration = (call.argument<Int>("duration") ?: 50).toLong()
                         result.success(service?.gesture(points, duration) ?: false)
+                    }
+                    "touchDown", "touchMove", "touchUp" -> {
+                        val x = call.argument<Double>("x") ?: 0.0
+                        val y = call.argument<Double>("y") ?: 0.0
+                        result.success(when (call.method) {
+                            "touchDown" -> service?.touchDown(x, y)
+                            "touchMove" -> service?.touchMove(x, y)
+                            else -> service?.touchUp(x, y)
+                        } ?: false)
                     }
                     "global" -> result.success(
                         service?.global(call.argument<String>("action") ?: "") ?: false)
