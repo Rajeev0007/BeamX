@@ -13,5 +13,19 @@ they are official BeamX releases or endorsed by Rajeev Development.
 Official releases: https://github.com/Rajeev0007/BeamX/releases
 Contact: https://github.com/Rajeev0007
 
+ADDITIONAL TERMS (GNU GPL version 3, section 7)
+These terms apply to BeamX in addition to the GPL-3.0:
+
+ (b) Attribution. Anyone who conveys BeamX or a work based on it must keep
+     the attribution "Originally developed by Rajeev Development" with a
+     link to https://github.com/Rajeev0007/BeamX, visibly in the app's
+     About screen and footer (or an equivalent place users can find), and
+     in its documentation.
+ (c) Modified versions must be marked as changed, and must not claim to be
+     official BeamX releases.
+ (e) No rights are granted to use the names "BeamX" or "Rajeev
+     Development", or the BeamX logo, for modified versions, except to
+     state truthfully that the work is based on BeamX.
+
 Third-party components keep their own licences. In the app, open
 Settings → About → About BeamX → View licences for the full list.

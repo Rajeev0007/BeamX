@@ -8,6 +8,7 @@ import '../models/peer_device.dart';
 import '../services/discovery_service.dart';
 import '../services/relay_client.dart';
 import '../services/trust_store.dart';
+import '../widgets/app_footer.dart';
 import '../widgets/page_header.dart';
 import '../widgets/pressable.dart';
 import '../widgets/radar.dart';
@@ -141,6 +142,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             );
           },
         ),
+        const SliverToBoxAdapter(child: AppFooter()),
       ],
     );
   }

@@ -8,6 +8,7 @@ import 'incoming_request_dialog.dart';
 import 'profiles_screen.dart';
 import 'settings_screen.dart';
 import 'stream_screen.dart';
+import 'terms_gate.dart';
 import 'transfers_screen.dart';
 
 class _Destination {
@@ -47,6 +48,9 @@ class _AppShellState extends State<AppShell> {
     _connection = c;
     c.pending.addListener(_onPending);
     c.session.addListener(_onSession);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ensureTermsAccepted(context);
+    });
   }
 
   @override

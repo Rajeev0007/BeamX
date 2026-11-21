@@ -6,13 +6,16 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_scope.dart';
 import '../models/settings.dart';
+import '../services/credits.dart';
 import '../services/diag_log.dart';
 import '../services/discovery_service.dart';
 import '../services/password_auth.dart';
 import '../services/settings_store.dart';
 import '../services/trust_store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_footer.dart';
 import '../widgets/page_header.dart';
+import 'legal_screen.dart';
 
 /// One searchable row in the settings list.
 class _Entry {
@@ -48,8 +51,7 @@ Future<void> _setPassword(BuildContext c, SettingsStore st) async {
   }
 }
 
-/// Set by the release build (--dart-define=BEAMX_VERSION=…).
-const beamxVersion = String.fromEnvironment('BEAMX_VERSION', defaultValue: 'dev');
+const beamxVersion = Credits.version;
 
 final _entries = <_Entry>[
   // Streaming
@@ -452,6 +454,22 @@ final _entries = <_Entry>[
       ),
     );
   }),
+  _Entry('About', 'Terms of Service', 'tos terms legal agreement', (c, st, s) {
+    return ListTile(
+      leading: const Icon(Icons.gavel_rounded),
+      title: const Text('Terms of Service'),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => LegalScreen.open(c, 'Terms of Service', 'TERMS.md'),
+    );
+  }),
+  _Entry('About', 'Privacy Policy', 'privacy data policy', (c, st, s) {
+    return ListTile(
+      leading: const Icon(Icons.privacy_tip_rounded),
+      title: const Text('Privacy Policy'),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => LegalScreen.open(c, 'Privacy Policy', 'PRIVACY.md'),
+    );
+  }),
   _Entry('About', 'Copy diagnostics log', 'bug report log debug problem', (c, st, s) {
     return ListTile(
       leading: const Icon(Icons.bug_report_rounded),
@@ -565,6 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
+            const AppFooter(),
           ],
         );
       },
