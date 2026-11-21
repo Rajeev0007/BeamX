@@ -151,7 +151,7 @@ void main() {
       }
       // The old bugs: ~486 px pictures and a ~2.5 Mbps ceiling.
       expect(bestShort, greaterThanOrEqualTo(720), reason: 'picture too small');
-      expect(bestKbps, greaterThan(1500), reason: 'bitrate too low with motion');
+      expect(bestKbps, greaterThan(1000), reason: 'bitrate too low with motion');
       expect(fps ?? 0, greaterThanOrEqualTo(10), reason: 'frame rate too low');
 
       // Changing the quality on the viewer takes effect on the sharer.

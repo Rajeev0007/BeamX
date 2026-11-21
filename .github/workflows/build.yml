@@ -67,7 +67,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libpulse-dev xvfb libxtst6 pulseaudio
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libpulse-dev xvfb libxtst6 pulseaudio ffmpeg
       # Real computers have a sound system; the CI machine doesn't. WebRTC
       # opens audio devices when it starts, so give it a virtual one.
       - run: |
@@ -79,7 +79,15 @@ jobs:
           channel: stable
           cache: true
       - run: python3 tool/prepare_platforms.py linux
-      - run: xvfb-run -a -s "-screen 0 1920x1080x24" flutter test integration_test/connection_test.dart -d linux --reporter expanded --verbose 2>&1 | grep -vE "^\[ +[0-9]+ ms\] (executing|Exit code|<-|->)" | tail -300
+      - name: Two-device tests (moving test video on a 1080p virtual screen)
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          sleep 2
+          # A moving, detailed picture so the encoder has real work to do.
+          ffplay -loglevel error -fs -an -f lavfi -i "testsrc2=size=1920x1080:rate=30" &
+          sleep 2
+          flutter test integration_test/connection_test.dart -d linux --reporter expanded --verbose 2>&1 | grep -vE "^\[ +[0-9]+ ms\] (executing|Exit code|<-|->)" | tail -300
 
   e2e-windows:
     needs: analyze
