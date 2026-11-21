@@ -192,10 +192,12 @@ class PeerJsRelay implements InternetRelay {
         status.value = RelayStatus(RelayState.online, internetId: internetId);
         return;
       case 'ID-TAKEN':
-        _stopped = true;
+        // Usually an old connection of this device the server hasn't
+        // dropped yet (it forgets it within ~90 s). Try again later.
         _ws?.close();
         status.value = const RelayStatus(RelayState.error,
-            message: 'This ID is in use on another connection. Restart BeamX.');
+            message: 'ID still in use by an earlier connection, retrying…');
+        _attempt = 5; // next retry in about a minute
         return;
       case 'ERROR':
         final p = m['payload'];
