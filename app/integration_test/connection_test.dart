@@ -197,8 +197,8 @@ void main() {
 
   testWidgets('connect from anywhere: ID + password over the public server', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final host = await _Device.create('Remote PC', 'c' * 32, 47910, internet: true);
-    final client = await _Device.create('Phone', 'd' * 32, 47911, internet: true);
+    final host = await _Device.create('Remote PC', TrustStore.randomHex(16), 47910, internet: true);
+    final client = await _Device.create('Phone', TrustStore.randomHex(16), 47911, internet: true);
     const password = 'correct horse battery';
     await host.trust.setPasswordKey(
         await PasswordAuth.deriveKey(password, host.trust.deviceId));
