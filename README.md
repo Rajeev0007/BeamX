@@ -105,9 +105,23 @@ flutter run
 
 Repository owner: see the [setup guide](docs/SETUP.md).
 
+## Official builds
+
+Official Android builds are signed by Rajeev Development. The app shows
+**✓ Official build** in its footer, or **Unofficial build** for copies signed
+by anyone else. On other platforms, check the download against
+`SHA256SUMS.txt` or the build attestation (see "Is it safe?" above).
+
 ## Licence
 
 Copyright © 2026 **Rajeev Development**. BeamX is free software under the
 [GNU GPL v3](LICENSE): you may use, study, share and change it, and shared
-changes must stay open source under the same licence. "BeamX" is a name of
-Rajeev Development; see [NOTICE](NOTICE) for use of the name in forks.
+changes must stay open source under the same licence. Under the
+[additional terms](NOTICE) (GPL-3.0 section 7), every copy must keep the
+credit "Originally developed by Rajeev Development", and modified versions
+must use a different name.
+
+[Terms of Service](TERMS.md) · [Privacy Policy](PRIVACY.md) · [Notice](NOTICE) · [Security](SECURITY.md)
+
+---
+<p align="center">BeamX · © 2026 Rajeev Development · Made in India</p>

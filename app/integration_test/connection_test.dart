@@ -16,6 +16,9 @@ import 'package:beamx/services/relay_client.dart';
 import 'package:beamx/services/settings_store.dart';
 import 'package:beamx/services/transfer_service.dart';
 import 'package:beamx/services/trust_store.dart';
+import 'dart:math';
+
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,7 +32,7 @@ class _Device {
   final ConnectionService connection;
 
   static Future<_Device> create(String name, String id, int port,
-      {bool internet = false}) async {
+      {bool internet = false, int resolution = 720, int fps = 30}) async {
     final settings = SettingsStore.memory(BeamSettings(
       internetEnabled: internet,
       passwordAccess: internet,
@@ -39,8 +42,8 @@ class _Device {
       audioEnabled: false,
       clipboardSync: ClipboardSync.off,
       discoverable: false,
-      resolution: 720,
-      fps: 30,
+      resolution: resolution,
+      fps: fps,
     ));
     final trust = await TrustStore.forTest(id);
     final pairing = PairingService();
@@ -69,8 +72,103 @@ Future<void> _waitFor(bool Function() ok, Duration timeout, String what) async {
   }
 }
 
+/// Fills the window with constantly changing coloured blocks, so the
+/// stream has real motion to encode (a still screen needs almost no data).
+class _Motion extends StatefulWidget {
+  const _Motion();
+  @override
+  State<_Motion> createState() => _MotionState();
+}
+
+class _MotionState extends State<_Motion> {
+  late final Timer _t =
+      Timer.periodic(const Duration(milliseconds: 33), (_) => setState(() => _seed++));
+  int _seed = 0;
+  @override
+  void dispose() {
+    _t.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _Blocks(_seed), size: Size.infinite);
+}
+
+class _Blocks extends CustomPainter {
+  _Blocks(this.seed);
+  final int seed;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = Random(seed);
+    for (var i = 0; i < 300; i++) {
+      canvas.drawRect(
+        Rect.fromLTWH(r.nextDouble() * size.width, r.nextDouble() * size.height,
+            20 + r.nextDouble() * 120, 20 + r.nextDouble() * 120),
+        Paint()..color = Color(0xFF000000 | r.nextInt(0xFFFFFF)),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Blocks old) => old.seed != seed;
+}
+
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+
+  testWidgets('quality: sharp picture and real bitrate with motion', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const MaterialApp(home: _Motion()));
+    final host = await _Device.create('Host PC', 'e' * 32, 47920);
+    final client = await _Device.create('Client', 'f' * 32, 47921, resolution: 1080);
+    final address = await _lanAddress();
+    final viewer = await client.connection.connect(
+      peer: PeerDevice(id: 'host', name: 'Host PC', platform: 'linux',
+          address: address, port: 47920, lastSeen: DateTime.now()),
+      code: host.pairing.code.value,
+      mode: StreamMode.view,
+    );
+    final sharer = host.connection.session.value!;
+    try {
+      await _waitFor(() => viewer.phase == SessionPhase.live, const Duration(seconds: 30), 'connect');
+      int short() {
+        final st = viewer.stats.value;
+        return min(st.width ?? 0, st.height ?? 0);
+      }
+
+      var bestKbps = 0.0, bestShort = 0;
+      double? fps;
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final st = viewer.stats.value;
+        bestKbps = max(bestKbps, st.kbps ?? 0);
+        bestShort = max(bestShort, short());
+        fps = st.fps;
+        DiagLog.add('test: 1080p t=${i + 1}s ${st.width}x${st.height} fps=${st.fps} '
+            'kbps=${st.kbps?.round()} codec=${st.codec}');
+      }
+      // The old bugs: ~486 px pictures and a ~2.5 Mbps ceiling.
+      expect(bestShort, greaterThanOrEqualTo(720), reason: 'picture too small');
+      expect(bestKbps, greaterThan(1000), reason: 'bitrate too low with motion');
+      expect(fps ?? 0, greaterThanOrEqualTo(10), reason: 'frame rate too low');
+
+      // Changing the quality on the viewer takes effect on the sharer.
+      viewer.requestQuality(const StreamQuality(
+          resolution: 480, fps: 30, autoBitrate: true, mbps: 8,
+          codec: VideoCodec.h264, audio: false));
+      await _waitFor(() => short() > 0 && short() <= 480,
+          const Duration(seconds: 15), 'switch to 480p');
+      DiagLog.add('test: switched to ${viewer.stats.value.width}x${viewer.stats.value.height}');
+    } finally {
+      // ignore: avoid_print
+      print('===== BeamX diagnostics log =====\n${DiagLog.text}\n=====');
+      await viewer.close('test done');
+      await sharer.close('test done');
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
 
   testWidgets('two devices connect, stream and stay connected', (tester) async {
     SharedPreferences.setMockInitialValues({});

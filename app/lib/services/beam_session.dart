@@ -664,29 +664,47 @@ class BeamSession extends ChangeNotifier {
     }
     try {
       final params = sender.parameters;
-      final encodings = params.encodings;
-      if (encodings == null || encodings.isEmpty) {
-        params.encodings = [RTCRtpEncoding()];
-      }
-      final e = params.encodings!.first;
-      e.maxFramerate = q.fps;
-      // Without a limit, WebRTC caps screen sharing at ~2.5 Mbps, which made
-      // the picture blurry and the frame rate drop. Auto now allows enough
-      // for sharp text, and congestion control still lowers it on weak
-      // networks.
-      e.maxBitrate = (q.autoBitrate ? autoMaxBitrate(q) : q.mbps * 1000000).round();
-      e.scaleResolutionDownBy = _scale;
+      final cached = (params.encodings?.isNotEmpty ?? false) ? params.encodings!.first : null;
+      final maxBitrate = (q.autoBitrate ? autoMaxBitrate(q) : q.mbps * 1000000).round();
+      // A clean encoding with only the limits we want. Copying the cached
+      // one sent fields (ssrc, rid, temporal layers) that WebRTC refuses to
+      // change, so every update was rejected and the default ~2.5 Mbps,
+      // full-size stream was used instead.
+      RTCRtpEncoding clean() => RTCRtpEncoding(
+            active: true,
+            numTemporalLayers: null,
+            maxFramerate: q.fps,
+            // Without a limit, WebRTC caps screen sharing at ~2.5 Mbps.
+            maxBitrate: maxBitrate,
+            scaleResolutionDownBy: _scale,
+            priority: RTCPriorityType.high,
+          );
+      final e = clean();
+      params.encodings = [e];
       // Screens default to "keep resolution, drop frames", which felt laggy.
-      // Smooth profiles keep the frame rate; others balance both.
       params.degradationPreference = q.fps >= 60
           ? RTCDegradationPreference.MAINTAIN_FRAMERATE
           : RTCDegradationPreference.BALANCED;
-      await sender.setParameters(params);
-      DiagLog.add('encoding: short side ${short ?? '?'} → ${q.resolution}p '
+      var ok = await sender.setParameters(params);
+      if (!ok) {
+        DiagLog.add('encoding attempt 1 rejected (cached: ${cached?.toMap()})');
+        params.degradationPreference = null;
+        params.encodings = [clean()];
+        ok = await sender.setParameters(params);
+      }
+      if (!ok) {
+        DiagLog.add('encoding attempt 2 rejected');
+        params.encodings = [
+          RTCRtpEncoding(numTemporalLayers: null, maxBitrate: maxBitrate)
+            ..scaleResolutionDownBy = _scale
+        ];
+        ok = await sender.setParameters(params);
+      }
+      DiagLog.add('encoding ${ok ? 'applied' : 'REJECTED'}: short side ${short ?? '?'} → ${q.resolution}p '
           '(scale ${_scale.toStringAsFixed(2)}), ${q.fps} FPS, '
           'max ${(e.maxBitrate! / 1e6).toStringAsFixed(1)} Mbps');
     } catch (err) {
-      debugPrint('BeamX: could not apply encoding ($err)');
+      DiagLog.add('could not apply encoding ($err)');
     }
   }
 
@@ -775,7 +793,6 @@ class BeamSession extends ChangeNotifier {
       double? fps, rtt;
       int? w, h, bytes;
       String? codecId;
-      double? ts;
       final codecs = <String, String>{};
       for (final r in reports) {
         final v = r.values;
@@ -788,7 +805,6 @@ class BeamSession extends ChangeNotifier {
           h = _num(v['frameHeight'])?.toInt();
           bytes = _num(isSharer ? v['bytesSent'] : v['bytesReceived'])?.toInt();
           codecId = v['codecId']?.toString();
-          ts = r.timestamp;
         } else if (r.type == 'candidate-pair' &&
             (v['nominated'] == true || v['nominated'] == 'true') &&
             v['state'] == 'succeeded') {
@@ -797,15 +813,17 @@ class BeamSession extends ChangeNotifier {
         }
       }
 
+      // Report timestamps use different units on different platforms
+      // (ms, µs, ns), which made the bitrate read up to 1000× too low, so
+      // measure the interval with the system clock instead.
       double? kbps;
-      if (bytes != null && ts != null && _lastBytes != null && _lastTimestamp != null) {
-        // Timestamps are in milliseconds on most platforms, microseconds on some.
-        var dt = ts - _lastTimestamp!;
-        if (dt > 100000) dt /= 1000;
-        if (dt > 0) kbps = (bytes - _lastBytes!) * 8 / dt;
+      final nowUs = DateTime.now().microsecondsSinceEpoch.toDouble();
+      if (bytes != null && _lastBytes != null && _lastTimestamp != null) {
+        final dtMs = (nowUs - _lastTimestamp!) / 1000;
+        if (dtMs > 0 && bytes >= _lastBytes!) kbps = (bytes - _lastBytes!) * 8 / dtMs;
       }
       _lastBytes = bytes;
-      _lastTimestamp = ts;
+      _lastTimestamp = bytes == null ? null : nowUs;
 
       // Learn the real screen height once, then scale to the target.
       // Learn the real screen size once from the local preview (the

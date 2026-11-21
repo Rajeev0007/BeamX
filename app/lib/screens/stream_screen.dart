@@ -346,165 +346,182 @@ class _StreamScreenState extends State<StreamScreen> {
     );
   }
 
-  Widget _toolbar(BuildContext context, bool showStats) {
+  /// Every toolbar action for the current state, most important first.
+  List<_Action> _actions(BuildContext context, bool showStats) {
     final store = AppScope.of(context).settings;
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Material(
-      color: Colors.black.withValues(alpha: 0.7),
-      shape: const StadiumBorder(),
-      elevation: 8,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ToolButton(
-              icon: s.isSharer ? Icons.stop_screen_share_rounded : Icons.call_end_rounded,
-              tooltip: s.isSharer ? 'Stop sharing' : 'Disconnect',
-              color: Colors.redAccent,
-              onTap: () => Navigator.of(context).maybePop(),
-            ),
-            ValueListenableBuilder<bool>(
-              valueListenable: s.link.ready,
-              builder: (context, ready, _) => _ToolButton(
-                icon: Icons.attach_file_rounded,
-                tooltip: 'Send files',
-                onTap: ready ? s.link.pickAndSend : null,
-              ),
-            ),
-            _ToolButton(
-              icon: Icons.query_stats_rounded,
-              tooltip: 'Stats overlay',
-              active: showStats,
-              onTap: () => store.update(
-                  (x) => x.copyWith(showStatsOverlay: !x.showStatsOverlay)),
-            ),
-            if (s.micAttached)
-              _ToolButton(
-                icon: s.micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
-                tooltip: s.micOn ? 'Mute my microphone' : 'Unmute my microphone',
-                active: s.micOn,
-                onTap: () => s.setMicOn(!s.micOn),
-              ),
-            if (s.canCapture)
-              _ToolButton(
-                icon: Icons.photo_camera_rounded,
-                tooltip: 'Screenshot',
-                onTap: () => _run(context, () async =>
-                    'Screenshot saved: ${await s.screenshot()}'),
-              ),
-            if (s.canCapture && BeamSession.recordingSupported)
-              _ToolButton(
-                icon: s.recording
-                    ? Icons.stop_circle_rounded
-                    : Icons.fiber_manual_record_rounded,
-                color: s.recording ? Colors.redAccent : null,
-                tooltip: s.recording ? 'Stop recording' : 'Record',
-                onTap: () => _run(context, () async {
-                  if (!s.recording) {
-                    await s.startRecording();
-                    return 'Recording… tap ⏹ to stop';
-                  }
-                  final path = await s.stopRecording();
-                  return 'Recording saved: ${path ?? ''}';
-                }),
-              ),
-            if (s.receivingAudio)
-              _ToolButton(
-                icon: s.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                tooltip: s.muted ? 'Unmute sound' : 'Mute sound',
-                onTap: () => s.setMuted(!s.muted),
-              ),
-            if (!s.isSharer)
-              _ToolButton(
-                icon: _fullScreen
-                    ? Icons.fullscreen_exit_rounded
-                    : Icons.fullscreen_rounded,
-                tooltip: _fullScreen ? 'Exit full screen' : 'Full screen',
-                onTap: _toggleFullScreen,
-              ),
-            if (!s.isSharer)
-              _ToolButton(
-                icon: Icons.high_quality_rounded,
-                tooltip: 'Quality',
-                onTap: () => _qualitySheet(context),
-              ),
-            if (s.isSharer)
-              ValueListenableBuilder<bool>(
-                valueListenable: s.link.controlAllowed,
-                builder: (context, allowed, _) => _ToolButton(
-                  icon: allowed ? Icons.mouse_rounded : Icons.mouse_outlined,
-                  tooltip: allowed
-                      ? 'Remote control is on: tap to turn off'
-                      : 'Let ${s.peerName} control this device',
-                  active: allowed,
-                  onTap: InputInjector.create() == null
-                      ? null
-                      : () => s.link.setControlAllowed(!allowed),
-                ),
-              ),
-            if (!s.isSharer)
-              ValueListenableBuilder<RemoteControlStatus>(
-                valueListenable: s.link.remote,
-                builder: (context, remote, _) => Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (remote.allowed)
-                      _ToolButton(
-                        icon: _controlOn
-                            ? Icons.mouse_rounded
-                            : Icons.mouse_outlined,
-                        tooltip: _controlOn
-                            ? 'Controlling: tap to only watch'
-                            : 'Watching: tap to control',
-                        active: _controlOn,
-                        onTap: () => setState(() => _controlOn = !_controlOn),
-                      ),
-                    if (remote.allowed && _controlOn)
-                      _ToolButton(
-                        icon: Icons.keyboard_rounded,
-                        tooltip: 'Keyboard',
-                        onTap: () => showRemoteKeyboard(context, s.link),
-                      ),
-                    if (remote.allowed && _controlOn)
-                      _ToolButton(
-                        icon: Icons.music_note_rounded,
-                        tooltip: 'Media remote',
-                        onTap: () => showMediaRemote(context, s.link),
-                      ),
-                    if (remote.allowed && _controlOn && remote.platform != 'android')
-                      _ToolButton(
-                        icon: Icons.sports_esports_rounded,
-                        tooltip: 'Gamepad',
-                        active: _gamepad,
-                        onTap: () => setState(() => _gamepad = !_gamepad),
-                      ),
-                    if (remote.allowed && _controlOn &&
-                        remote.platform == 'android') ...[
-                      _ToolButton(
-                        icon: Icons.arrow_back_rounded,
-                        tooltip: 'Back',
-                        onTap: () => s.link.sendInput({'e': 'nav', 'a': 'back'}),
-                      ),
-                      _ToolButton(
-                        icon: Icons.circle_outlined,
-                        tooltip: 'Home',
-                        onTap: () => s.link.sendInput({'e': 'nav', 'a': 'home'}),
-                      ),
-                      _ToolButton(
-                        icon: Icons.crop_square_rounded,
-                        tooltip: 'Recent apps',
-                        onTap: () =>
-                            s.link.sendInput({'e': 'nav', 'a': 'recents'}),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-          ],
-        ),
+    final ready = s.link.ready.value;
+    final remote = s.link.remote.value;
+    final controlling = !s.isSharer && remote.allowed && _controlOn;
+    return [
+      _Action(
+        s.isSharer ? Icons.stop_screen_share_rounded : Icons.call_end_rounded,
+        s.isSharer ? 'Stop sharing' : 'Disconnect',
+        () => Navigator.of(context).maybePop(),
+        color: Colors.redAccent,
+        pinned: true,
       ),
+      if (s.isSharer)
+        _Action(
+          s.link.controlAllowed.value ? Icons.mouse_rounded : Icons.mouse_outlined,
+          s.link.controlAllowed.value
+              ? 'Remote control on (tap to turn off)'
+              : 'Let ${s.peerName} control this device',
+          InputInjector.create() == null
+              ? null
+              : () => s.link.setControlAllowed(!s.link.controlAllowed.value),
+          active: s.link.controlAllowed.value,
+          pinned: true,
+        ),
+      if (!s.isSharer && remote.allowed)
+        _Action(
+          _controlOn ? Icons.mouse_rounded : Icons.mouse_outlined,
+          _controlOn ? 'Controlling (tap to only watch)' : 'Watching (tap to control)',
+          () => setState(() => _controlOn = !_controlOn),
+          active: _controlOn,
+          pinned: true,
+        ),
+      if (controlling)
+        _Action(Icons.keyboard_rounded, 'Keyboard',
+            () => showRemoteKeyboard(context, s.link), pinned: true),
+      if (controlling && remote.platform == 'android') ...[
+        _Action(Icons.arrow_back_rounded, 'Back',
+            () => s.link.sendInput({'e': 'nav', 'a': 'back'}), pinned: true),
+        _Action(Icons.circle_outlined, 'Home',
+            () => s.link.sendInput({'e': 'nav', 'a': 'home'})),
+        _Action(Icons.crop_square_rounded, 'Recent apps',
+            () => s.link.sendInput({'e': 'nav', 'a': 'recents'})),
+      ],
+      if (!s.isSharer)
+        _Action(
+          _fullScreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+          _fullScreen ? 'Exit full screen' : 'Full screen',
+          _toggleFullScreen,
+          pinned: true,
+        ),
+      if (s.receivingAudio)
+        _Action(s.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+            s.muted ? 'Unmute sound' : 'Mute sound', () => s.setMuted(!s.muted)),
+      if (s.micAttached)
+        _Action(s.micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+            s.micOn ? 'Mute my microphone' : 'Unmute my microphone',
+            () => s.setMicOn(!s.micOn),
+            active: s.micOn),
+      if (controlling)
+        _Action(Icons.music_note_rounded, 'Media remote',
+            () => showMediaRemote(context, s.link)),
+      if (controlling && remote.platform != 'android')
+        _Action(Icons.sports_esports_rounded, 'Gamepad',
+            () => setState(() => _gamepad = !_gamepad),
+            active: _gamepad),
+      _Action(Icons.attach_file_rounded, 'Send files',
+          ready ? s.link.pickAndSend : null),
+      if (s.canCapture)
+        _Action(Icons.photo_camera_rounded, 'Screenshot',
+            () => _run(context, () async => 'Screenshot saved: ${await s.screenshot()}')),
+      if (s.canCapture && BeamSession.recordingSupported)
+        _Action(
+          s.recording ? Icons.stop_circle_rounded : Icons.fiber_manual_record_rounded,
+          s.recording ? 'Stop recording' : 'Record',
+          () => _run(context, () async {
+            if (!s.recording) {
+              await s.startRecording();
+              return 'Recording… tap ⏹ to stop';
+            }
+            final path = await s.stopRecording();
+            return 'Recording saved: ${path ?? ''}';
+          }),
+          color: s.recording ? Colors.redAccent : null,
+        ),
+      if (!s.isSharer)
+        _Action(Icons.high_quality_rounded, 'Quality', () => _qualitySheet(context)),
+      _Action(
+        Icons.query_stats_rounded,
+        showStats ? 'Hide stats' : 'Show stats',
+        () => store.update((x) => x.copyWith(showStatsOverlay: !x.showStatsOverlay)),
+        active: showStats,
+      ),
+    ];
+  }
+
+  Widget _toolbar(BuildContext context, bool showStats) {
+    return ListenableBuilder(
+      listenable: Listenable.merge(
+          [s.link.ready, s.link.remote, s.link.controlAllowed]),
+      builder: (context, _) => LayoutBuilder(builder: (context, c) {
+        final all = _actions(context, showStats);
+        // Each button is 48 px; keep them full size and put the rest in
+        // a labelled "More" menu instead of shrinking everything.
+        final fit = ((c.maxWidth - 32) / 48).floor();
+        List<_Action> shown;
+        List<_Action> more;
+        if (all.length <= fit) {
+          shown = all;
+          more = const [];
+        } else {
+          final room = (fit - 1).clamp(1, all.length);
+          final pinned = all.where((a) => a.pinned).take(room).toList();
+          final extra = all.where((a) => !a.pinned).take(room - pinned.length);
+          shown = [...pinned, ...extra];
+          more = all.where((a) => !shown.contains(a)).toList();
+        }
+        return Material(
+          color: Colors.black.withValues(alpha: 0.7),
+          shape: const StadiumBorder(),
+          elevation: 8,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final a in shown)
+                  _ToolButton(
+                    icon: a.icon,
+                    tooltip: a.label,
+                    onTap: a.onTap,
+                    color: a.color,
+                    active: a.active,
+                  ),
+                if (more.isNotEmpty)
+                  _ToolButton(
+                    icon: Icons.more_horiz_rounded,
+                    tooltip: 'More',
+                    onTap: () => _moreSheet(context, more),
+                  ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  void _moreSheet(BuildContext context, List<_Action> actions) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 520),
+      builder: (sheet) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final a in actions)
+                ListTile(
+                  enabled: a.onTap != null,
+                  leading: Icon(a.icon, color: a.color),
+                  title: Text(a.label),
+                  trailing: a.active ? const Icon(Icons.check_rounded) : null,
+                  onTap: a.onTap == null
+                      ? null
+                      : () {
+                          Navigator.pop(sheet);
+                          a.onTap!();
+                        },
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -567,6 +584,7 @@ class _StreamScreenState extends State<StreamScreen> {
                 ]),
                 const SizedBox(height: 12),
                 Text(
+                  '${s.link.remote.value.platform == 'android' ? 'Android phones share at up to 30 FPS. ' : ''}'
                   'The other device lowers these automatically if its screen '
                   'or network can\'t keep up.',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -747,4 +765,17 @@ class _ControlProblem extends StatelessWidget {
       },
     );
   }
+}
+
+class _Action {
+  const _Action(this.icon, this.label, this.onTap,
+      {this.color, this.active = false, this.pinned = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Color? color;
+  final bool active;
+
+  /// Kept on the bar when space is short.
+  final bool pinned;
 }

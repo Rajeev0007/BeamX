@@ -96,12 +96,21 @@
       controlled remotely
 - [x] © Rajeev Development; About screen, NOTICE, publisher info in installers
 
-## v1.0.1: Connection fixes (current)
+## v1.0.1: Connection fixes ✅
 - [x] Windows firewall rule covers Public networks (Windows 11 default)
 - [x] Automatic two-device tests in CI: local network on Linux and Windows,
       and ID + password over the internet, streaming for a minute each
 - [x] Version check between devices, clearer failure help with the log
 - [x] Network path details in the diagnostics log
+
+## v1.0.2: Quality checks, legal, credits (current)
+- [x] Automatic quality test with a moving picture: resolution, bitrate,
+      frame rate and live quality changes are checked on every build
+- [x] Toolbar keeps full-size buttons and moves extras to a More menu
+- [x] Terms of Service and Privacy Policy in the repo and the app, with a
+      first-launch agreement and a footer on every main screen
+- [x] Credit protection: GPL section 7 attribution terms, official-build
+      check on Android
 
 ## Later
 - [ ] Phone notifications, messages and battery on the PC

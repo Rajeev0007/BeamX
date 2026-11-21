@@ -34,6 +34,23 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
+    /** SHA-1 of the certificate this app is signed with (lowercase hex). */
+    @Suppress("DEPRECATION")
+    private fun signingSha1(): String? = try {
+        val sigs = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            info.signingInfo?.apkContentsSigners
+        } else {
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+        }
+        sigs?.firstOrNull()?.toByteArray()?.let { bytes ->
+            java.security.MessageDigest.getInstance("SHA-1").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+        }
+    } catch (e: Exception) {
+        null
+    }
+
     /** True in the Control edition, which declares the accessibility service. */
     private fun isControlEdition(): Boolean = try {
         packageManager.getServiceInfo(
@@ -51,6 +68,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "isEnabled" -> result.success(service != null)
                     "isControlEdition" -> result.success(isControlEdition())
+                    "signingSha1" -> result.success(signingSha1())
                     "openReleases" -> {
                         startActivity(Intent(Intent.ACTION_VIEW,
                             android.net.Uri.parse("https://github.com/Rajeev0007/BeamX/releases/latest"))
