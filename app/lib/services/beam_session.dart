@@ -681,8 +681,26 @@ class BeamSession extends ChangeNotifier {
       params.degradationPreference = q.fps >= 60
           ? RTCDegradationPreference.MAINTAIN_FRAMERATE
           : RTCDegradationPreference.BALANCED;
-      await sender.setParameters(params);
-      DiagLog.add('encoding: short side ${short ?? '?'} → ${q.resolution}p '
+      var ok = await sender.setParameters(params);
+      if (!ok) {
+        // Some platforms reject the degradation preference; the size,
+        // frame rate and bitrate limits matter most, so retry without it.
+        params.degradationPreference = null;
+        ok = await sender.setParameters(params);
+      }
+      if (!ok) {
+        // Start again from fresh parameters with only the essentials.
+        final fresh = sender.parameters;
+        final fe = (fresh.encodings?.isNotEmpty ?? false)
+            ? fresh.encodings!.first
+            : (fresh.encodings = [RTCRtpEncoding()]).first;
+        fe
+          ..maxFramerate = e.maxFramerate
+          ..maxBitrate = e.maxBitrate
+          ..scaleResolutionDownBy = e.scaleResolutionDownBy;
+        ok = await sender.setParameters(fresh);
+      }
+      DiagLog.add('encoding ${ok ? 'applied' : 'REJECTED'}: short side ${short ?? '?'} → ${q.resolution}p '
           '(scale ${_scale.toStringAsFixed(2)}), ${q.fps} FPS, '
           'max ${(e.maxBitrate! / 1e6).toStringAsFixed(1)} Mbps');
     } catch (err) {
