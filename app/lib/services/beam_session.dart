@@ -664,47 +664,47 @@ class BeamSession extends ChangeNotifier {
     }
     try {
       final params = sender.parameters;
-      final encodings = params.encodings;
-      if (encodings == null || encodings.isEmpty) {
-        params.encodings = [RTCRtpEncoding()];
-      }
-      final e = params.encodings!.first;
-      e.maxFramerate = q.fps;
-      // Without a limit, WebRTC caps screen sharing at ~2.5 Mbps, which made
-      // the picture blurry and the frame rate drop. Auto now allows enough
-      // for sharp text, and congestion control still lowers it on weak
-      // networks.
-      e.maxBitrate = (q.autoBitrate ? autoMaxBitrate(q) : q.mbps * 1000000).round();
-      e.scaleResolutionDownBy = _scale;
+      final cached = (params.encodings?.isNotEmpty ?? false) ? params.encodings!.first : null;
+      final maxBitrate = (q.autoBitrate ? autoMaxBitrate(q) : q.mbps * 1000000).round();
+      // A clean encoding with only the limits we want. Copying the cached
+      // one sent fields (ssrc, rid, temporal layers) that WebRTC refuses to
+      // change, so every update was rejected and the default ~2.5 Mbps,
+      // full-size stream was used instead.
+      RTCRtpEncoding clean() => RTCRtpEncoding(
+            active: true,
+            numTemporalLayers: null,
+            maxFramerate: q.fps,
+            // Without a limit, WebRTC caps screen sharing at ~2.5 Mbps.
+            maxBitrate: maxBitrate,
+            scaleResolutionDownBy: _scale,
+            priority: RTCPriorityType.high,
+          );
+      final e = clean();
+      params.encodings = [e];
       // Screens default to "keep resolution, drop frames", which felt laggy.
-      // Smooth profiles keep the frame rate; others balance both.
       params.degradationPreference = q.fps >= 60
           ? RTCDegradationPreference.MAINTAIN_FRAMERATE
           : RTCDegradationPreference.BALANCED;
       var ok = await sender.setParameters(params);
       if (!ok) {
-        // Some platforms reject the degradation preference; the size,
-        // frame rate and bitrate limits matter most, so retry without it.
+        DiagLog.add('encoding attempt 1 rejected (cached: ${cached?.toMap()})');
         params.degradationPreference = null;
+        params.encodings = [clean()];
         ok = await sender.setParameters(params);
       }
       if (!ok) {
-        // Start again from fresh parameters with only the essentials.
-        final fresh = sender.parameters;
-        final fe = (fresh.encodings?.isNotEmpty ?? false)
-            ? fresh.encodings!.first
-            : (fresh.encodings = [RTCRtpEncoding()]).first;
-        fe
-          ..maxFramerate = e.maxFramerate
-          ..maxBitrate = e.maxBitrate
-          ..scaleResolutionDownBy = e.scaleResolutionDownBy;
-        ok = await sender.setParameters(fresh);
+        DiagLog.add('encoding attempt 2 rejected');
+        params.encodings = [
+          RTCRtpEncoding(numTemporalLayers: null, maxBitrate: maxBitrate)
+            ..scaleResolutionDownBy = _scale
+        ];
+        ok = await sender.setParameters(params);
       }
       DiagLog.add('encoding ${ok ? 'applied' : 'REJECTED'}: short side ${short ?? '?'} → ${q.resolution}p '
           '(scale ${_scale.toStringAsFixed(2)}), ${q.fps} FPS, '
           'max ${(e.maxBitrate! / 1e6).toStringAsFixed(1)} Mbps');
     } catch (err) {
-      debugPrint('BeamX: could not apply encoding ($err)');
+      DiagLog.add('could not apply encoding ($err)');
     }
   }
 
