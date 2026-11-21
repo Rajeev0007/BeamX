@@ -18,7 +18,7 @@ import 'package:beamx/services/transfer_service.dart';
 import 'package:beamx/services/trust_store.dart';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

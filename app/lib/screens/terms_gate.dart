@@ -43,7 +43,7 @@ Future<void> ensureTermsAccepted(BuildContext context) async {
                 ),
               ]),
               const SizedBox(height: 12),
-              Text('${Credits.copyright}',
+              Text(Credits.copyright,
                   style: Theme.of(d).textTheme.bodySmall),
             ],
           ),

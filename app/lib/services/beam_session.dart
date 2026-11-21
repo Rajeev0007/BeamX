@@ -775,7 +775,6 @@ class BeamSession extends ChangeNotifier {
       double? fps, rtt;
       int? w, h, bytes;
       String? codecId;
-      double? ts;
       final codecs = <String, String>{};
       for (final r in reports) {
         final v = r.values;
@@ -788,7 +787,6 @@ class BeamSession extends ChangeNotifier {
           h = _num(v['frameHeight'])?.toInt();
           bytes = _num(isSharer ? v['bytesSent'] : v['bytesReceived'])?.toInt();
           codecId = v['codecId']?.toString();
-          ts = r.timestamp;
         } else if (r.type == 'candidate-pair' &&
             (v['nominated'] == true || v['nominated'] == 'true') &&
             v['state'] == 'succeeded') {
@@ -797,15 +795,17 @@ class BeamSession extends ChangeNotifier {
         }
       }
 
+      // Report timestamps use different units on different platforms
+      // (ms, µs, ns), which made the bitrate read up to 1000× too low, so
+      // measure the interval with the system clock instead.
       double? kbps;
-      if (bytes != null && ts != null && _lastBytes != null && _lastTimestamp != null) {
-        // Timestamps are in milliseconds on most platforms, microseconds on some.
-        var dt = ts - _lastTimestamp!;
-        if (dt > 100000) dt /= 1000;
-        if (dt > 0) kbps = (bytes - _lastBytes!) * 8 / dt;
+      final nowUs = DateTime.now().microsecondsSinceEpoch.toDouble();
+      if (bytes != null && _lastBytes != null && _lastTimestamp != null) {
+        final dtMs = (nowUs - _lastTimestamp!) / 1000;
+        if (dtMs > 0 && bytes >= _lastBytes!) kbps = (bytes - _lastBytes!) * 8 / dtMs;
       }
       _lastBytes = bytes;
-      _lastTimestamp = ts;
+      _lastTimestamp = bytes == null ? null : nowUs;
 
       // Learn the real screen height once, then scale to the target.
       // Learn the real screen size once from the local preview (the
