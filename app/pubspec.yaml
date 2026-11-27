@@ -22,7 +22,7 @@ dependencies:
   mobile_scanner: ^7.0.0
   path_provider: ^2.1.5
   ffi: ^2.1.3
-  window_manager: ^0.5.1
+  window_manager: ^0.7.1
   wakelock_plus: ^1.8.0
   # 0.9 needs cross_file 0.4, which conflicts with file_picker.
   desktop_drop: ^0.8.4
